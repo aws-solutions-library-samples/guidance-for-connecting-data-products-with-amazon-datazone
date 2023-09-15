@@ -1,0 +1,13 @@
+*.swp
+package-lock.json
+__pycache__
+.pytest_cache
+.venv
+*.egg-info
+temp
+.DS_Store
+output
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out

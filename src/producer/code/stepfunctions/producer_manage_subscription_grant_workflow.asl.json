@@ -1,0 +1,75 @@
+{
+    "Comment": "State machine to orchestrate activities to manage dataset subscription grants on the producer side",
+    "StartAt": "Get connection details",
+    "States": {
+        "Get connection details": {
+            "Type": "Task",
+            "Next": "Which connection type?",
+            "Parameters": {
+                "FunctionName": "${p_get_connection_details_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.ConnectionDetails",
+            "ResultSelector": {
+                "ConnectionType.$": "$.Payload.ConnectionType",
+                "ConnectionArn.$": "$.Payload.ConnectionArn",
+                "ConnectionName.$": "$.Payload.ConnectionName",
+                "ConnectionProperties.$": "$.Payload.ConnectionProperties",
+                "ConnectionAssetName.$": "$.Payload.ConnectionAssetName",
+                "ConnectionCrawlerName.$": "$.Payload.ConnectionCrawlerName"
+            }
+        },
+        "Which connection type?": {
+            "Type": "Choice",
+            "Default": "Unsupported connection type",
+            "Choices": [
+                {
+                    "Next": "Grant JDBC subscription",
+                    "StringEquals": "JDBC",
+                    "Variable": "$.ConnectionDetails.ConnectionType"
+                }
+            ]
+        },
+        "Grant JDBC subscription": {
+            "Type": "Task",
+            "Next": "Share subscription secret",
+            "Parameters": {
+                "FunctionName": "${p_grant_jdbc_subscription_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.GrantSubscriptionDetails",
+            "ResultSelector": {
+                "ConnectionArn.$": "$.Payload.glue_connection_arn",
+                "DatazoneConsumerProjectId.$": "$.Payload.datazone_consumer_project_id",
+                "SecretArn.$": "$.Payload.secret_arn",
+                "SecretName.$": "$.Payload.secret_name",
+                "DataAssets.$": "$.Payload.data_assets",
+                "OwnerAccount.$":  "$.Payload.owner_account",
+                "LastUpdated.$":  "$.Payload.last_updated",
+                "NewSubscriptionSecret.$":  "$.Payload.new_subscription_secret"
+            }
+        },
+        "Unsupported connection type": {
+            "Type": "Fail",
+            "Error": "Unsupported connection type"
+        },
+        "Share subscription secret": {
+            "Type": "Task",
+            "End": true,
+            "Parameters": {
+                "FunctionName": "${p_share_subscription_secret_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.ShareSubscriptionSecretDetails",
+            "ResultSelector": {
+                "SecretName.$": "$.Payload.secret_name",
+                "SecretArn.$": "$.Payload.secret_arn",
+                "NewSubscriptionSecret.$":  "$.Payload.new_subscription_secret",
+                "SubscriptionConsumerRoles.$": "$.Payload.subscription_consumer_roles"
+            }
+        }
+    }
+}

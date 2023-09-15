@@ -1,0 +1,76 @@
+{
+    "Comment": "State machine to orchestrate activities to manage dataset subscription revocations on the producer side",
+    "StartAt": "Get connection details",
+    "States": {
+        "Get connection details": {
+            "Type": "Task",
+            "Next": "Which connection type?",
+            "Parameters": {
+                "FunctionName": "${p_get_connection_details_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.ConnectionDetails",
+            "ResultSelector": {
+                "ConnectionType.$": "$.Payload.ConnectionType",
+                "ConnectionArn.$": "$.Payload.ConnectionArn",
+                "ConnectionName.$": "$.Payload.ConnectionName",
+                "ConnectionProperties.$": "$.Payload.ConnectionProperties",
+                "ConnectionAssetName.$": "$.Payload.ConnectionAssetName",
+                "ConnectionCrawlerName.$": "$.Payload.ConnectionCrawlerName"
+            }
+        },
+        "Which connection type?": {
+            "Type": "Choice",
+            "Default": "Unsupported connection type",
+            "Choices": [
+                {
+                    "Next": "Revoke JDBC subscription",
+                    "StringEquals": "JDBC",
+                    "Variable": "$.ConnectionDetails.ConnectionType"
+                }
+            ]
+        },
+        "Revoke JDBC subscription": {
+            "Type": "Task",
+            "Next": "Delete / keep subscription secret",
+            "Parameters": {
+                "FunctionName": "${p_revoke_jdbc_subscription_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.RevokeSubscriptionDetails",
+            "ResultSelector": {
+                "ConnectionArn.$": "$.Payload.glue_connection_arn",
+                "DatazoneConsumerProjectId.$": "$.Payload.datazone_consumer_project_id",
+                "SecretArn.$": "$.Payload.secret_arn",
+                "SecretName.$": "$.Payload.secret_name",
+                "DataAssets.$": "$.Payload.data_assets",
+                "OwnerAccount.$":  "$.Payload.owner_account",
+                "LastUpdated.$":  "$.Payload.last_updated",
+                "DeleteSecret.$":  "$.Payload.delete_secret"
+            }
+        },
+        "Delete / keep subscription secret": {
+            "Type": "Task",
+            "End": true,
+            "Parameters": {
+                "FunctionName": "${p_delete_keep_subscription_secret_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.DeleteKeepSubscriptionSecretDetails",
+            "ResultSelector": {
+                "SecretName.$": "$.Payload.secret_name",
+                "SecretArn.$": "$.Payload.secret_arn",
+                "SecretDeleted.$": "$.Payload.secret_deleted",
+                "SecretDeletionDate.$":  "$.Payload.secret_deletion_date",
+                "SecretRecoveryWindowInDays.$": "$.Payload.secret_recovery_window_in_days"
+            }
+        },
+        "Unsupported connection type": {
+            "Type": "Fail",
+            "Error": "Unsupported connection type"
+        }
+    }
+}

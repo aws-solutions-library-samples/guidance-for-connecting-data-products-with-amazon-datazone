@@ -1,0 +1,25 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Includes Amazon IAM role, assumed by CloudFormation (CDK) when deploying DataZone Connectors solution, as an AWS Lake Formation administrator."
+
+Parameters:
+  
+  CdkCloudFormationExecutionRoleName:
+    Type: String
+    Description: >-
+      Name of the CDK CloudFormation Execution Role that will be used for DataZone Connectors app deployment.
+
+Resources:
+
+  CdkCloudFormationExecutionRoleLakeFormationAdminSetting:  
+    Type: AWS::LakeFormation::DataLakeSettings
+    Properties:
+      Admins:
+        - DataLakePrincipalIdentifier: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CdkCloudFormationExecutionRoleName}
+      TrustedResourceOwners:
+        - !Ref "AWS::AccountId"
+
+Outputs:
+
+  CdkCloudFormationExecutionRoleArn:
+    Description: "Arn of the CDK CloudFormation role to be used to deploy DataZone Connectors app"
+    Value: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CdkCloudFormationExecutionRoleName}

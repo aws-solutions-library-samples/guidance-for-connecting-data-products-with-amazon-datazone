@@ -1,0 +1,31 @@
+{
+    "Comment": "State machine to orchestrate activities to manage project delete event in project's account",
+    "StartAt": "Get account cross-account resource ARNs",
+    "States": {
+        "Get account cross-account resource ARNs": {
+            "Type": "Pass",
+            "Next": "Clean Project Roles",
+            "Parameters": {
+                "CleanProjectRolesLambdaArn.$": "States.Format('arn:aws:lambda:${region}:{}:function:${a_clean_project_roles_lambda_name}', $.EventDetails.projectAccount)",
+                "AccountAssumeRoleArn.$": "States.Format('arn:aws:iam::{}:role/${a_cross_account_assume_role_name}', $.EventDetails.projectAccount)"
+            },
+            "ResultPath": "$.CrossAccountResources"
+        },
+        "Clean Project Roles": {
+            "Type": "Task",
+            "End": true,
+            "Parameters": {
+                "FunctionName.$": "$.CrossAccountResources.CleanProjectRolesLambdaArn",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Credentials": {
+                "RoleArn.$": "$.CrossAccountResources.AccountAssumeRoleArn"
+            },
+            "ResultPath": "$.AccountCleanProjectRolesDetails",
+            "ResultSelector": {
+                "ProjectRoleArns.$": "$.Payload.project_role_arns"
+            }
+        }
+    }
+}

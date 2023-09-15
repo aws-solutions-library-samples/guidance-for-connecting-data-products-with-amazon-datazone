@@ -1,0 +1,54 @@
+{
+    "Comment": "State machine to orchestrate activities to manage dataset subscription grants on consumer side",
+    "StartAt": "New secret?",
+    "States": {
+        "New secret?": {
+            "Type": "Choice",
+            "Default": "Secret already shared",
+            "Choices": [
+                {
+                    "Next": "Copy subscription secret",
+                    "StringEquals": "true",
+                    "Variable": "$.ShareSubscriptionSecretDetails.NewSubscriptionSecret"
+                }
+            ]
+        },
+        "Copy subscription secret": {
+            "Type": "Task",
+            "Next": "Update subscription records",
+            "Parameters": {
+                "FunctionName": "${c_copy_subscription_secret_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.CopySubscriptionSecretDetails",
+            "ResultSelector": {
+                "SecretArn.$": "$.Payload.secret_arn",
+                "SecretName.$": "$.Payload.secret_name"
+            }
+        },
+        "Secret already shared": {
+            "Type": "Pass",
+            "Next": "Update subscription records",
+            "ResultPath": null
+        },
+        "Update subscription records": {
+            "Type": "Task",
+            "End": true,
+            "Parameters": {
+                "FunctionName": "${c_update_subscription_records_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.UpdateSubscriptionRecordsDetails",
+            "ResultSelector": {
+                "DataZoneConsumerProjectId.$": "$.Payload.datazone_consumer_project_id",
+                "DataZoneAssetName.$": "$.Payload.datazone_asset_name",
+                "SecretName.$": "$.Payload.secret_name",
+                "SecretArn.$": "$.Payload.secret_arn",
+                "OwnerAccount.$": "$.Payload.owner_account",
+                "LastUpdated.$": "$.Payload.last_updated"
+            }
+        }
+    }
+}

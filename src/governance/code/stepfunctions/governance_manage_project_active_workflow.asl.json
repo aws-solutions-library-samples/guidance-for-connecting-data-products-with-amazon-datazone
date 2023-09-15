@@ -1,0 +1,50 @@
+{
+    "Comment": "State machine to orchestrate activities to manage project active event in project's account",
+    "StartAt": "Get account cross-account resource ARNs",
+    "States": {
+        "Get account cross-account resource ARNs": {
+            "Type": "Pass",
+            "Next": "Update Project Roles",
+            "Parameters": {
+                "UpdateProjectRolesLambdaArn.$": "States.Format('arn:aws:lambda:${region}:{}:function:${a_update_project_roles_lambda_name}', $.EventDetails.projectAccount)",
+                "AddLFTagProjectDBsLambdaArn.$": "States.Format('arn:aws:lambda:${region}:{}:function:${p_add_lf_tag_project_dbs_lambda_name}', $.EventDetails.projectAccount)",
+                "AccountAssumeRoleArn.$": "States.Format('arn:aws:iam::{}:role/${a_cross_account_assume_role_name}', $.EventDetails.projectAccount)"
+            },
+            "ResultPath": "$.CrossAccountResources"
+        },
+        "Update Project Roles": {
+            "Type": "Task",
+            "Next": "Add LF-Tag to Project DBs",
+            "Parameters": {
+                "FunctionName.$": "$.CrossAccountResources.UpdateProjectRolesLambdaArn",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Credentials": {
+                "RoleArn.$": "$.CrossAccountResources.AccountAssumeRoleArn"
+            },
+            "ResultPath": "$.AccountUpdateProjectRolesDetails",
+            "ResultSelector": {
+                "ProjectRoleArns.$": "$.Payload.project_role_arns"
+            }
+        },
+        "Add LF-Tag to Project DBs": {
+            "Type": "Task",
+            "End": true,
+            "Parameters": {
+                "FunctionName.$": "$.CrossAccountResources.AddLFTagProjectDBsLambdaArn",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Credentials": {
+                "RoleArn.$": "$.CrossAccountResources.AccountAssumeRoleArn"
+            },
+            "ResultPath": "$.AccountAddLFTagProjectDBsDetails",
+            "ResultSelector": {
+                "ProjectDBNames.$": "$.Payload.project_db_names",
+                "LFTagKey.$": "$.Payload.lakeformation_tag_key",
+                "LFTagValue.$": "$.Payload.lakeformation_tag_value"
+            }
+        }
+    }
+}

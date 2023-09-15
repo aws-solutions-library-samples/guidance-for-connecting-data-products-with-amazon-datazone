@@ -1,0 +1,59 @@
+{
+    "Comment": "State machine to orchestrate activities to manage dataset subscription revocations on consumer and producer side",
+    "StartAt": "Get producer / consumer cross-account resource ARNs",
+    "States": {
+        "Get producer / consumer cross-account resource ARNs": {
+            "Type": "Pass",
+            "Next": "Manage Subscription Revoke - Producer",
+            "Parameters": {
+                "ProducerStateMachineArn.$": "States.Format('arn:aws:states:${region}:{}:stateMachine:${p_manage_subscription_revoke_state_machine_name}', $.EventDetails.sourceAccountId)",
+                "ProducerAssumeRoleArn.$": "States.Format('arn:aws:iam::{}:role/${a_cross_account_assume_role_name}', $.EventDetails.sourceAccountId)",
+                "ConsumerStateMachineArn.$": "States.Format('arn:aws:states:${region}:{}:stateMachine:${c_manage_subscription_revoke_state_machine_name}', States.ArrayGetItem(States.StringSplit($.EventDetails.projectRoles[0], ':'), 3))",
+                "ConsumerAssumeRoleArn.$": "States.Format('{}/${a_cross_account_assume_role_name}', States.ArrayGetItem(States.StringSplit($.EventDetails.projectRoles[0], '/'), 0))"
+            },
+            "ResultPath": "$.CrossAccountResources"
+        },
+        "Manage Subscription Revoke - Producer": {
+            "Type": "Task",
+            "Next": "Manage Subscription Revoke - Consumer",
+            "Parameters": {
+                "Input": {
+                    "EventDetails.$": "$.EventDetails"
+                },
+                "StateMachineArn.$": "$.CrossAccountResources.ProducerStateMachineArn"
+            },
+            "Resource": "arn:aws:states:::states:startExecution.sync:2",
+            "Credentials": {
+                "RoleArn.$": "$.CrossAccountResources.ProducerAssumeRoleArn"
+            },
+            "ResultPath": "$.ProducerManageSubscriptionRevokeDetails",
+            "ResultSelector": {
+                "SecretArn.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretArn",
+                "SecretName.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretName",
+                "SecretDeleted.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretDeleted",
+                "SecretDeletionDate.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretDeletionDate",
+                "SecretRecoveryWindowInDays.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretRecoveryWindowInDays"
+            }
+        },
+        "Manage Subscription Revoke - Consumer": {
+            "Type": "Task",
+            "End": true,
+            "Parameters": {
+                "Input": {
+                    "EventDetails.$": "$.EventDetails",
+                    "DeleteKeepSubscriptionSecretDetails.$": "$.ProducerManageSubscriptionRevokeDetails"
+                },
+                "StateMachineArn.$": "$.CrossAccountResources.ConsumerStateMachineArn"
+            },
+            "Resource": "arn:aws:states:::states:startExecution.sync:2",
+            "Credentials": {
+                "RoleArn.$": "$.CrossAccountResources.ConsumerAssumeRoleArn"
+            },
+            "ResultPath": "$.ConsumerManageSubscriptionRevokeDetails",
+            "ResultSelector": {
+                "DataZoneConsumerProjectId.$": "$.Output.RemoveSubscriptionRecordsDetails.DataZoneConsumerProjectId",
+                "DataZoneAssetName.$": "$.Output.RemoveSubscriptionRecordsDetails.DataZoneAssetName"
+            }
+        }
+    }
+}
