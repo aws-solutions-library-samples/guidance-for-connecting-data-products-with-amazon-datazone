@@ -269,7 +269,7 @@ The majority of the monthly cost is dependent on AWS Glue Crawlers. Note that th
 | Amazon Athena | 20000 queries per month scanning 10 MB of dta in average per query | $0.95 |
 | AWS Lambda | 20000 requests per month with average duration of 7000 ms and 128 MB memory | $0.76 |
 
-## What is the security posture of the this solution?
+## What is the security posture of this solution?
 
 When you build systems on AWS infrastructure, security responsibilities are shared between you and AWS. This [shared responsibility model](http://aws.amazon.com/compliance/shared-responsibility-model/) reduces your operational burden because AWS operates, manages, and controls the components including the host operating system, the virtualization layer, and the physical security of the facilities in which the services operate. For more information about [AWS security](http://aws.amazon.com/security/), visit AWS Cloud Security.
 
