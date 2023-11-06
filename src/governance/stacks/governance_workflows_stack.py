@@ -4,8 +4,8 @@ from aws_cdk import (
 )
 
 from constructs import Construct
-from src.governance.constructs.governance_project_active_workflow import GovernanceManageProjectActiveWorkflowConstruct
-from src.governance.constructs.governance_project_delete_workflow import GovernanceManageProjectDeleteWorkflowConstruct
+from src.governance.constructs.governance_environment_active_workflow import GovernanceManageEnvironmentActiveWorkflowConstruct
+from src.governance.constructs.governance_environment_delete_workflow import GovernanceManageEnvironmentDeleteWorkflowConstruct
 from src.governance.constructs.governance_subscription_grant_workflow import GovernanceManageSubscriptionGrantWorkflowConstruct
 from src.governance.constructs.governance_subscription_revoke_workflow import GovernanceManageSubscriptionRevokeWorkflowConstruct
 
@@ -35,24 +35,24 @@ class GovernanceWorkflowsStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
         account_id, region = governance_props['account_id'], governance_props['region']
         
-        g_manage_project_active_workflow_props = workflows_props['g_manage_project_active']
+        g_manage_environment_active_workflow_props = workflows_props['g_manage_environment_active']
 
-        GovernanceManageProjectActiveWorkflowConstruct(
+        GovernanceManageEnvironmentActiveWorkflowConstruct(
             scope = self, 
-            construct_id = 'dz-conn-g-manage-project-active-workflow-construct',
+            construct_id = 'dz-conn-g-manage-environment-active-workflow-construct',
             governance_props = governance_props,
-            workflow_props = g_manage_project_active_workflow_props,
+            workflow_props = g_manage_environment_active_workflow_props,
             common_constructs = common_constructs,
             env = env
         )
 
-        g_manage_project_delete_workflow_props = workflows_props['g_manage_project_delete']
+        g_manage_environment_delete_workflow_props = workflows_props['g_manage_environment_delete']
 
-        GovernanceManageProjectDeleteWorkflowConstruct(
+        GovernanceManageEnvironmentDeleteWorkflowConstruct(
             scope = self, 
-            construct_id = 'dz-conn-g-manage-project-delete-workflow-construct',
+            construct_id = 'dz-conn-g-manage-environment-delete-workflow-construct',
             governance_props = governance_props,
-            workflow_props = g_manage_project_delete_workflow_props,
+            workflow_props = g_manage_environment_delete_workflow_props,
             common_constructs = common_constructs,
             env = env
         )

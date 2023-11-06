@@ -21,6 +21,9 @@ A_COMMON_KEY_ALIAS = os.getenv('A_COMMON_KEY_ALIAS')
 # Constant: Represents the account id
 ACCOUNT_ID = os.getenv('ACCOUNT_ID')
 
+# Constant: Represents the region
+REGION = os.getenv('REGION')
+
 g_cross_account_role_arn = f'arn:aws:iam::{G_ACCOUNT_ID}:role/{G_CROSS_ACCOUNT_ASSUME_ROLE_NAME}'
 
 kms = boto3.client('kms')
@@ -42,10 +45,11 @@ def handler(event, context):
     Parameters
     ----------
     event: dict - Input event dict containing:
-        EventDetails: dict - Dict containing details including:
-            authorizedPrincipals: list - List of dicts containing subscription principals details including:
-                id: str - DataZone project id
-        ShareSubscriptionSecretDetails: dict - Dict containing share subscription details including:
+        SubscriptionDetails: dict - Dict containing details including:
+            ConsumerProjectDetails: dict - Dict containing consumer project details including:
+                ProjectId: str - DataZone consumer project id
+                EnvironmentId: str - DataZone consumer environment id
+        ProducerGrantDetails: dict - Dict containing producer grant details including:
             SecretArn: str - Arn of producer shared subscription secret.
 
     context: dict - Input context. Not used on function
@@ -56,12 +60,15 @@ def handler(event, context):
         secret_arn: str - Arn of the copied secret local to the consumer account
         secret_name: str - Name of the copied secret local to the consumer account
     """
+    subscription_details = event['SubscriptionDetails']
+    producer_grant_details = event['ProducerGrantDetails']
 
-    event_details = event['EventDetails']
-    share_subscription_secret_details = event['ShareSubscriptionSecretDetails']
+    domain_id = subscription_details['DomainId']
+    consumer_project_details = subscription_details['ConsumerProjectDetails']
 
-    subscription_consumer_project = event_details['authorizedPrincipals'][0]['id']
-    shared_subscription_secret_arn = share_subscription_secret_details['SecretArn']
+    consumer_project_id = consumer_project_details['ProjectId']
+    consumer_environment_id = consumer_project_details['EnvironmentId']
+    shared_subscription_secret_arn = producer_grant_details['SecretArn']
 
     secrets_manager_response = secrets_manager.get_secret_value(
         SecretId= shared_subscription_secret_arn
@@ -70,13 +77,13 @@ def handler(event, context):
     shared_subscription_secret_value = json.loads(secrets_manager_response['SecretString'])
     
     project_secret_name_suffix = str(uuid.uuid4()).replace('-', '')
-    project_secret_name = f'dz-conn-c-{subscription_consumer_project}-{project_secret_name_suffix}'
+    project_secret_name = f'dz-conn-c-{consumer_project_id}-{consumer_environment_id}-{project_secret_name_suffix}'
 
-    secrets_manager_response = create_secret(project_secret_name, shared_subscription_secret_value, subscription_consumer_project)
+    secrets_manager_response = create_secret(project_secret_name, shared_subscription_secret_value, consumer_environment_id, consumer_project_id, domain_id)
     project_secret_name = secrets_manager_response['Name']
     project_secret_arn = secrets_manager_response['ARN']
     
-    update_secret_association_item(shared_subscription_secret_arn, subscription_consumer_project, project_secret_name, project_secret_arn)
+    update_secret_association_item(shared_subscription_secret_arn, project_secret_arn, project_secret_name, consumer_environment_id, consumer_project_id, domain_id)
     
     response = {
         'secret_arn': project_secret_name,
@@ -86,7 +93,7 @@ def handler(event, context):
     return response
 
 
-def create_secret(secret_name, secret_value, datazone_project_id):
+def create_secret(secret_name, secret_value, environment_id, project_id, domain_id ):
     """ Complementary function to create a new secret local to the consumer account and associated to subscribing project"""
 
     kms_response = kms.describe_key(
@@ -101,8 +108,16 @@ def create_secret(secret_name, secret_value, datazone_project_id):
         SecretString=json.dumps(secret_value),
         Tags=[
             {
-                'Key': 'datazone:projectId',
-                'Value': datazone_project_id
+                'Key': 'AmazonDataZoneEnvironment',
+                'Value': environment_id
+            },
+            {
+                'Key': 'AmazonDataZoneProject',
+                'Value': project_id
+            },
+            {
+                'Key': 'AmazonDataZoneDomain',
+                'Value': domain_id
             }
         ]
     )
@@ -112,15 +127,18 @@ def create_secret(secret_name, secret_value, datazone_project_id):
     return secrets_manager_response
 
 
-def update_secret_association_item(producer_secret_arn, consumer_project_id, secret_name, secret_arn):
+def update_secret_association_item(shared_secret_arn, secret_arn, secret_name, environment_id, project_id, domain_id):
     """ Complementary function to update item with secret mapping details in respective governance DynamoDB table"""
 
     secret_association_item = {
-        'datazone_producer_shared_secret_arn': producer_secret_arn,
-        'datazone_consumer_project_id':  consumer_project_id,
-        'secret_name': secret_name,
+        'shared_secret_arn': shared_secret_arn,
         'secret_arn': secret_arn,
+        'secret_name': secret_name,
+        'datazone_consumer_environment_id':  environment_id,
+        'datazone_consumer_project_id':  project_id,
+        'datazone_domain': domain_id,
         'owner_account': ACCOUNT_ID,
+        'owner_region': REGION,
         'last_updated': datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     }
     

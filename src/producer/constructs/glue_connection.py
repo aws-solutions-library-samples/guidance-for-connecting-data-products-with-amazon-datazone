@@ -23,7 +23,7 @@ class GlueJDBCConnectorConstruct(Construct):
 
         connection_props : dict
             dict with required properties for workflow creation, including:
-                datazone_project_id: str - Id of the Amazon DataZone project that will be associated to the glue connection
+                datazone_environment_id: str - Id of the Amazon DataZone environment that will be associated to the glue connection
                 glue_connection: dict - Dict containing connection specific properties including:
                     name: str - Name to assign to the glue connection.
                     engine: str - Engine of the JDBC source
@@ -43,7 +43,9 @@ class GlueJDBCConnectorConstruct(Construct):
         super().__init__(scope, construct_id, **kwargs)
         account_id, region = account_props['account_id'], account_props['region']
 
+        datazone_domain_id = connection_props['datazone_domain_id']
         datazone_project_id = connection_props['datazone_project_id']
+        datazone_environment_id = connection_props['datazone_environment_id']
         glue_connection_props = connection_props['glue_connection']
         glue_connection_engine = glue_connection_props['engine']
         glue_connection_host = glue_connection_props['host']
@@ -78,7 +80,9 @@ class GlueJDBCConnectorConstruct(Construct):
             )
         )
 
-        Tags.of(self.glue_connection).add('datazone:projectId', datazone_project_id)
+        Tags.of(self.glue_connection).add('AmazonDataZoneDomain', datazone_domain_id)
+        Tags.of(self.glue_connection).add('AmazonDataZoneProject', datazone_project_id)
+        Tags.of(self.glue_connection).add('AmazonDataZoneEnvironment', datazone_environment_id)
 
 
 class GlueJDBCConnectorWithCrawlersConstruct(GlueJDBCConnectorConstruct):
@@ -98,7 +102,7 @@ class GlueJDBCConnectorWithCrawlersConstruct(GlueJDBCConnectorConstruct):
 
         connection_props : dict
             dict with required properties for workflow creation, including:
-                datazone_project_id: str - Id of the Amazon DataZone project that will be associated to the glue connection
+                datazone_environment_id: str - Id of the Amazon DataZone environment that will be associated to the glue connection
                 glue_connection: dict - Dict containing connection specific properties (refer to super class for more details)
                 glue_crawlers: list - List containing a list of dicts, each with properties of a crawler to associate to the connection, including:
                     name: str - Name to assign to the glue crawler.
@@ -113,7 +117,9 @@ class GlueJDBCConnectorWithCrawlersConstruct(GlueJDBCConnectorConstruct):
         super().__init__(scope, construct_id, account_props, connection_props, env, **kwargs)
         account_id = account_props['account_id']
 
+        datazone_domain_id = connection_props['datazone_domain_id']
         datazone_project_id = connection_props['datazone_project_id']
+        datazone_environment_id = connection_props['datazone_environment_id']
         glue_connection_props = connection_props['glue_connection']
         glue_crawlers_props = connection_props['glue_crawlers'] if 'glue_crawlers' in connection_props else None
         
@@ -140,7 +146,9 @@ class GlueJDBCConnectorWithCrawlersConstruct(GlueJDBCConnectorConstruct):
                         ]
                     ),
                     tags= {
-                        'datazone:projectId': datazone_project_id
+                        'AmazonDataZoneDomain': datazone_domain_id,
+                        'AmazonDataZoneProject': datazone_project_id,
+                        'AmazonDataZoneEnvironment': datazone_environment_id
                     }
                 )
 

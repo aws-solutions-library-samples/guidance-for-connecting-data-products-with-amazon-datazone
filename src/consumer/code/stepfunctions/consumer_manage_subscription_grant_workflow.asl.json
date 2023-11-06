@@ -9,9 +9,14 @@
                 {
                     "Next": "Copy subscription secret",
                     "StringEquals": "true",
-                    "Variable": "$.ShareSubscriptionSecretDetails.NewSubscriptionSecret"
+                    "Variable": "$.ProducerGrantDetails.NewSubscriptionSecret"
                 }
             ]
+        },
+        "Secret already shared": {
+            "Type": "Pass",
+            "Next": "Update subscription records",
+            "ResultPath": null
         },
         "Copy subscription secret": {
             "Type": "Task",
@@ -27,11 +32,6 @@
                 "SecretName.$": "$.Payload.secret_name"
             }
         },
-        "Secret already shared": {
-            "Type": "Pass",
-            "Next": "Update subscription records",
-            "ResultPath": null
-        },
         "Update subscription records": {
             "Type": "Task",
             "End": true,
@@ -42,11 +42,19 @@
             "Resource": "arn:aws:states:::lambda:invoke",
             "ResultPath": "$.UpdateSubscriptionRecordsDetails",
             "ResultSelector": {
+                "DataZoneConsumerEnvironmentId.$": "$.Payload.datazone_consumer_environment_id",
                 "DataZoneConsumerProjectId.$": "$.Payload.datazone_consumer_project_id",
-                "DataZoneAssetName.$": "$.Payload.datazone_asset_name",
-                "SecretName.$": "$.Payload.secret_name",
+                "DataZoneDomainId.$": "$.Payload.datazone_domain_id",
+                "DataZoneAssetId.$": "$.Payload.datazone_asset_id",
+                "DataZoneAssetRevision.$": "$.Payload.datazone_asset_revision",
+                "DataZoneAssetType.$": "$.Payload.datazone_asset_type",
+                "DataZoneListingId.$": "$.Payload.datazone_listing_id",
+                "DataZoneListingRevision.$": "$.Payload.datazone_listing_revision",
+                "DataZoneListingName.$": "$.Payload.datazone_listing_name",
                 "SecretArn.$": "$.Payload.secret_arn",
+                "SecretName.$": "$.Payload.secret_name",
                 "OwnerAccount.$": "$.Payload.owner_account",
+                "OwnerRegion.$": "$.Payload.owner_region",
                 "LastUpdated.$": "$.Payload.last_updated"
             }
         }

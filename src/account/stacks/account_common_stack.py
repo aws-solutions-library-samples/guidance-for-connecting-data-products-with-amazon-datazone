@@ -9,10 +9,12 @@ from aws_cdk import (
     Duration,
     CustomResource,
     custom_resources,
+    RemovalPolicy,
     aws_kms as kms,
     aws_iam as iam,
     aws_lambda as lambda_,
-    aws_servicecatalog as servicecatalog
+    aws_servicecatalog as servicecatalog,
+    aws_s3 as s3
 )
 
 from constructs import Construct
@@ -35,6 +37,17 @@ class DataZoneConnectorsAccountCommonStack(Stack):
         
         super().__init__(scope, construct_id, **kwargs)
         account_id, region = account_props['account_id'], account_props['region']
+
+        # ------------------ S3 ------------------------------
+        a_bucket= s3.Bucket(
+            scope= self,
+            id= 'a_bucket',
+            bucket_name= account_props['s3']['bucket_name'],
+            encryption= s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl= True,
+            auto_delete_objects= True,
+            removal_policy= RemovalPolicy.DESTROY
+        )
 
         # ----------------------- KMS ---------------------------     
         a_common_key_policy = iam.PolicyDocument(
@@ -71,17 +84,50 @@ class DataZoneConnectorsAccountCommonStack(Stack):
             policy=a_common_key_policy
         )
 
-        a_common_key_alias_name = GLOBAL_VARIABLES['account']['a_common_kms_key_alias']
+        a_common_key_alias_name = 'dz_conn_a_common_key'
         a_common_key.add_alias(f"alias/{a_common_key_alias_name}")
         
-        # ----------------------- IAM for DataZone Projects --------------------------- 
-        a_project_permission_boundary_policy_file = open('src/account/code/iam/datazone_custom_project_permission_boundary.json')
-        a_project_permission_boundary_policy_json = json.load(a_project_permission_boundary_policy_file)
-        a_project_permission_boundary_policy = iam.ManagedPolicy(
+        # ----------------------- IAM for DataZone Environments --------------------------- 
+        a_environment_permission_boundary_policy_file = open('src/account/code/iam/datazone_custom_environment_permission_boundary.json')
+        a_environment_permission_boundary_policy_json = json.load(a_environment_permission_boundary_policy_file)
+        a_environment_permission_boundary_policy = iam.ManagedPolicy(
             scope= self,
-            id= 'a_project_permission_boundary_policy',
-            managed_policy_name= 'dz_conn_a_project_permission_boundary_policy',
-            document= iam.PolicyDocument.from_json(a_project_permission_boundary_policy_json)
+            id= 'a_environment_permission_boundary_policy',
+            managed_policy_name= 'dz_conn_a_environment_permission_boundary_policy',
+            document= iam.PolicyDocument.from_json(a_environment_permission_boundary_policy_json)
+        )
+
+        a_environment_policy = iam.ManagedPolicy(
+            scope= self,
+            id= 'a_environment_policy',
+            managed_policy_name= 'dz_conn_a_environment_policy',
+            statements= [
+                iam.PolicyStatement(
+                    actions=['s3:Get*', 's3:List*', 's3:Describe*'],
+                    resources=[a_bucket.bucket_arn, f'{a_bucket.bucket_arn}/*']
+                ),
+                iam.PolicyStatement(
+                    actions=['lambda:InvokeFunction', 'glue:StartCrawler', 'glue:StopCrawler', 'secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
+                    resources=[
+                        f'arn:aws:lambda:{region}:{account_id}:function:*',
+                        f'arn:aws:glue:{region}:{account_id}:crawler/*',
+                        f'arn:aws:secretsmanager:{region}:{account_id}:secret:*'
+                    ],
+                    conditions={
+                        'StringEquals': {
+                            'aws:ResourceTag/AmazonDataZoneEnvironment': '${aws:PrincipalTag/AmazonDataZoneEnvironment}'
+                        }
+                    }
+                ),
+                iam.PolicyStatement(
+                    actions=['glue:GetCrawler', 'glue:GetCrawlers', 'glue:ListCrawlers', 'glue:BatchGetCrawlers', 'glue:ListCrawls',  'glue:GetConnection', 'glue:GetConnections', 'glue:TestConnection'],
+                    resources=['*']
+                ),
+                iam.PolicyStatement(
+                    actions=['secretsmanager:ListSecrets'],
+                    resources=['*']
+                )
+            ]
         )
 
         # ----------------------- IAM for Glue ---------------------------        
@@ -114,17 +160,19 @@ class DataZoneConnectorsAccountCommonStack(Stack):
                     resources=['*']
                 ),
                 iam.PolicyStatement(
-                    actions=['glue:GetDatabase*', 'glue:*Table'],
+                    actions=['glue:GetDatabase', 'glue:GetDatabases', 'glue:*Table'],
                     resources=[f'arn:aws:glue:{region}:{account_id}:database/*', f'arn:aws:glue:{region}:{account_id}:table/*']
                 )
             ]
         )
-
-        a_common_glue_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('CloudWatchLogsFullAccess'))
+        
         a_common_glue_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('service-role/AWSGlueServiceRole'))
         a_common_glue_role.add_managed_policy(a_common_glue_policy)
 
-        # ----------------------- IAM for Lambda & Step Functions ---------------------------        
+        # ----------------------- IAM for Lambda & Step Functions ---------------------------
+        g_account_number = GLOBAL_VARIABLES['governance']["g_account_number"]
+        g_cross_account_assume_role_name =  GLOBAL_VARIABLES['governance']["g_cross_account_assume_role_name"]
+        
         a_common_lambda_role = iam.Role(
             scope= self,
             id= 'a_common_lambda_role',
@@ -138,8 +186,8 @@ class DataZoneConnectorsAccountCommonStack(Stack):
             managed_policy_name= 'a_common_lambda_policy',
             statements= [
                 iam.PolicyStatement(
-                    actions=['iam:Get*', 'iam:List*', 'iam:*RolePolicy', 'iam:*Policy*', 'iam:*RolePermissionsBoundary', 'iam:*RolePolicy'],
-                    resources=[f'arn:aws:iam::{account_id}:role/datazone-usr-*']
+                    actions=['iam:PutRolePermissionsBoundary', 'iam:AttachRolePolicy', 'iam:DetachRolePolicy'],
+                    resources=[f'arn:aws:iam::{account_id}:role/datazone_usr_*']
                 ),
                 iam.PolicyStatement(
                     actions=['lakeformation:GetLFTag', 'lakeformation:ListLFTags', 'lakeformation:AddLFTagsToResource', 'lakeformation:RemoveLFTagsFromResource'],
@@ -158,32 +206,42 @@ class DataZoneConnectorsAccountCommonStack(Stack):
                     resources=['*']
                 ),
                 iam.PolicyStatement(
-                    actions=['secretsmanager:GetSecretValue', 'secretsmanager:CreateSecret', 'secretsmanager:DescribeSecret', 'secretsmanager:DeleteSecret', 'secretsmanager:ListSecrets', 'secretsmanager:UpdateSecret', 'secretsmanager:PutResourcePolicy', "secretsmanager:TagResource"],
-                    resources=[f'arn:aws:secretsmanager:{region}:{account_id}:secret:*']
+                    actions=['secretsmanager:GetSecretValue', 'secretsmanager:CreateSecret', 'secretsmanager:DescribeSecret', 'secretsmanager:DeleteSecret', 'secretsmanager:ListSecrets', 'secretsmanager:UpdateSecret', 'secretsmanager:GetResourcePolicy', 'secretsmanager:PutResourcePolicy', "secretsmanager:TagResource"],
+                    resources=[f'arn:aws:secretsmanager:{region}:{account_id}:secret:dz-conn-*']
+                ),
+                iam.PolicyStatement(
+                    actions=['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret', 'secretsmanager:ListSecrets', 'kms:Decrypt', 'kms:DescribeKey'],
+                    resources=['*']
                 ),
                 iam.PolicyStatement(
                     actions=['kms:Decrypt', 'kms:DescribeKey', 'kms:Encrypt', 'kms:GenerateDataKey*', 'kms:ReEncrypt*'],
                     resources=[f'arn:aws:kms:{region}:{account_id}:alias/{a_common_key_alias_name}']
                 ),
                 iam.PolicyStatement(
-                    actions=['sts:AssumeRole', 'secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret', 'secretsmanager:ListSecrets', 'kms:Decrypt', 'kms:DescribeKey'],
-                    resources=['*']
+                    actions=['sts:AssumeRole'],
+                    resources=[f'arn:aws:iam::{g_account_number}:role/{g_cross_account_assume_role_name}']
                 ),
                 iam.PolicyStatement(
                     actions=['servicecatalog:AssociatePrincipalWithPortfolio', 'servicecatalog:DisassociatePrincipalFromPortfolio'],
                     resources=['*']
+                ),
+                iam.PolicyStatement(
+                    actions=['logs:CreateLogGroup'],
+                    resources=[f'arn:aws:logs:{region}:{account_id}:*']
+                ),
+                iam.PolicyStatement(
+                    actions=['logs:CreateLogStream', 'logs:PutLogEvents'],
+                    resources=[f'arn:aws:logs:{region}:{account_id}:log-group:/aws/lambda/dz_conn_*']
                 )
             ]
         )
 
-        a_common_lambda_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('AWSServiceCatalogEndUserFullAccess'))
-        a_common_lambda_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('CloudWatchLogsFullAccess'))
         a_common_lambda_role.add_managed_policy(a_common_lambda_policy)
 
         a_common_sf_role = iam.Role(
             scope= self,
             id= 'a_common_sf_role',
-            role_name= GLOBAL_VARIABLES['account']['a_common_stepfunctions_role_name'],
+            role_name= 'dz_conn_a_common_stepfunctions_role',
             assumed_by= iam.ServicePrincipal('states.amazonaws.com')
         )
 
@@ -194,47 +252,57 @@ class DataZoneConnectorsAccountCommonStack(Stack):
             statements= [
                 iam.PolicyStatement(
                     actions=['lambda:InvokeFunction'],
-                    resources=[f'arn:aws:lambda:{region}:{account_id}:*']
+                    resources=[f'arn:aws:lambda:{region}:{account_id}:function:dz_conn_*']
+                ),
+                iam.PolicyStatement(
+                    actions=['logs:CreateLogGroup', 'logs:DescribeLogGroups'],
+                    resources=[f'arn:aws:logs:{region}:{account_id}:*']
+                ),
+                iam.PolicyStatement(
+                    actions=['logs:CreateLogDelivery', 'logs:CreateLogStream', 'logs:GetLogDelivery', 'logs:UpdateLogDelivery', 'logs:ListLogDeliveries', 'logs:DeleteLogDelivery', 'logs:PutLogEvents', 'logs:PutResourcePolicy', 'logs:DescribeResourcePolicies'],
+                    resources=[f'arn:aws:logs:{region}:{account_id}:log-group:/aws/step-functions/dz_conn_*']
+                ),
+                iam.PolicyStatement(
+                    actions=['xray:PutTraceSegments', 'xray:PutTelemetryRecords', 'xray:GetSamplingRules', 'xray:GetSamplingTargets'],
+                    resources=[f'arn:aws:xray:{region}:{account_id}:*']
                 )
             ]
         )
 
-        a_common_sf_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('CloudWatchLogsFullAccess'))
         a_common_sf_role.add_managed_policy(a_common_sf_policy)
 
         # ---------------- Lambda ------------------------
-        a_update_project_roles_lambda = lambda_.Function(
+        a_update_environment_roles_lambda = lambda_.Function(
             scope= self,
-            id= 'a_update_project_roles_lambda',
-            function_name= GLOBAL_VARIABLES["account"]["a_update_project_roles_lambda_name"],
-            runtime= lambda_.Runtime.PYTHON_3_8,
-            code=lambda_.Code.from_asset(path.join('src/account/code/lambda', "update_project_roles")),
-            handler= "update_project_roles.handler",
+            id= 'a_update_environment_roles_lambda',
+            function_name= GLOBAL_VARIABLES["account"]["a_update_environment_roles_lambda_name"],
+            runtime= lambda_.Runtime.PYTHON_3_11,
+            code=lambda_.Code.from_asset(path.join('src/account/code/lambda', "update_environment_roles")),
+            handler= "update_environment_roles.handler",
             role= a_common_lambda_role,
             environment= {
-                'A_PROJECT_LAMBDA_INLINE_POLICY_NAME': GLOBAL_VARIABLES['account']['a_project_lambda_inline_policy_name'],
-                'A_PERMISSION_BOUNDARY_POLICY_ARN': a_project_permission_boundary_policy.managed_policy_arn,
+                'A_ENVIRONMENT_POLICY_ARN': a_environment_policy.managed_policy_arn,
+                'A_PERMISSION_BOUNDARY_POLICY_ARN': a_environment_permission_boundary_policy.managed_policy_arn,
                 'A_REGION': region,
                 'A_ACCOUNT_ID':account_id
             }
         )
 
-        a_clean_project_roles_lambda = lambda_.Function(
+        a_clean_environment_roles_lambda = lambda_.Function(
             scope= self,
-            id= 'a_clean_project_roles_lambda',
-            function_name= GLOBAL_VARIABLES["account"]["a_clean_project_roles_lambda_name"],
-            runtime= lambda_.Runtime.PYTHON_3_8,
-            code=lambda_.Code.from_asset(path.join('src/account/code/lambda', "clean_project_roles")),
-            handler= "clean_project_roles.handler",
+            id= 'a_clean_environment_roles_lambda',
+            function_name= GLOBAL_VARIABLES["account"]["a_clean_environment_roles_lambda_name"],
+            runtime= lambda_.Runtime.PYTHON_3_11,
+            code=lambda_.Code.from_asset(path.join('src/account/code/lambda', "clean_environment_roles")),
+            handler= "clean_environment_roles.handler",
             role= a_common_lambda_role,
             environment= {
-                'A_PROJECT_LAMBDA_INLINE_POLICY_NAME': GLOBAL_VARIABLES['account']['a_project_lambda_inline_policy_name'],
+                'A_ENVIRONMENT_POLICY_ARN': a_environment_policy.managed_policy_arn,
                 'A_ACCOUNT_ID':account_id
             }
         )
 
         # ----------------------- IAM for Governance Cross-Account Access --------------------------- 
-        g_account_number = GLOBAL_VARIABLES['governance']["g_account_number"]
         g_common_stepfunctions_role_name = GLOBAL_VARIABLES['governance']["g_common_stepfunctions_role_name"]
         g_common_stepfunctions_role_arn = f'arn:aws:iam::{g_account_number}:role/{g_common_stepfunctions_role_name}'
         
@@ -261,7 +329,7 @@ class DataZoneConnectorsAccountCommonStack(Stack):
             statements= [
                 iam.PolicyStatement(
                     actions=['states:DescribeStateMachine', 'states:StartExecution', 'states:StartSyncExecution', 'states:ListExecutions', 'states:DescribeExecution', 'states:StopExecution'],
-                    resources=[f'arn:aws:states:{region}:{account_id}:*']
+                    resources=[f'arn:aws:states:{region}:{account_id}:stateMachine:dz_conn_*', f'arn:aws:states:{region}:{account_id}:execution:dz_conn_*']
                 ),
                 iam.PolicyStatement(
                     actions=['lambda:InvokeFunction'],
@@ -270,7 +338,6 @@ class DataZoneConnectorsAccountCommonStack(Stack):
             ]
         )
 
-        a_cross_account_assume_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('CloudWatchLogsFullAccess'))
         a_cross_account_assume_role.add_managed_policy(a_cross_account_assume_policy)
 
         # ------------------ Service Catalog Portfolio ------------------------------
@@ -298,42 +365,44 @@ class DataZoneConnectorsAccountCommonStack(Stack):
 
             a_service_portfolio.give_access_to_role(a_access_role)
 
-        a_manage_service_portfolio_project_roles_access_lambda = lambda_.Function(
+        a_manage_service_portfolio_environment_roles_access_lambda = lambda_.Function(
             scope= self,
-            id= 'a_manage_service_portfolio_project_roles_access_lambda',
-            function_name= GLOBAL_VARIABLES["account"]["a_manage_service_portfolio_project_roles_access_lambda_name"],
-            runtime= lambda_.Runtime.PYTHON_3_8,
-            code=lambda_.Code.from_asset(path.join('src/account/code/lambda', "manage_service_portfolio_project_roles_access")),
-            handler= "manage_service_portfolio_project_roles_access.handler",
+            id= 'a_manage_service_portfolio_environment_roles_access_lambda',
+            function_name= 'dz_conn_a_manage_service_portfolio_environment_roles_access',
+            runtime= lambda_.Runtime.PYTHON_3_11,
+            code=lambda_.Code.from_asset(path.join('src/account/code/lambda', "manage_service_portfolio_environment_roles_access")),
+            handler= "manage_service_portfolio_environment_roles_access.handler",
             role= a_common_lambda_role,
             environment= {
                 'A_SERVICE_PORTFOLIO_ID': a_service_portfolio.portfolio_id
             }
         )
 
-        a_manage_service_portfolio_project_roles_access_provider = custom_resources.Provider(
+        a_manage_service_portfolio_environment_roles_access_provider = custom_resources.Provider(
             scope= self,
-            id= 'a_manage_service_portfolio_project_roles_access_provider',
-            on_event_handler= a_manage_service_portfolio_project_roles_access_lambda
+            id= 'a_manage_service_portfolio_environment_roles_access_provider',
+            on_event_handler= a_manage_service_portfolio_environment_roles_access_lambda
         )
 
-        a_manage_service_portfolio_project_roles_access_custom_resource = CustomResource(
+        a_manage_service_portfolio_environment_roles_access_custom_resource = CustomResource(
             scope= self,
-            id= 'a_manage_service_portfolio_project_roles_access_custom_resource',
+            id= 'a_manage_service_portfolio_environment_roles_access_custom_resource',
             resource_type='Custom::LambdaCustomResource',
-            service_token= a_manage_service_portfolio_project_roles_access_provider.service_token
+            service_token= a_manage_service_portfolio_environment_roles_access_provider.service_token
         )
         
         # -------------- Outputs --------------------
         self.outputs = {
+            'a_bucket': a_bucket,
             'a_common_key': a_common_key,
             'a_common_key_alias': a_common_key_alias_name,
-            'a_project_permission_boundary_policy': a_project_permission_boundary_policy,
+            'a_environment_permission_boundary_policy': a_environment_permission_boundary_policy,
+            'a_environment_policy': a_environment_policy,
             'a_common_glue_role': a_common_glue_role,
             'a_common_lambda_role': a_common_lambda_role,
             'a_common_sf_role': a_common_sf_role,
-            'a_update_project_roles_lambda': a_update_project_roles_lambda,
-            'a_clean_project_roles_lambda': a_clean_project_roles_lambda,
+            'a_update_environment_roles_lambda': a_update_environment_roles_lambda,
+            'a_clean_environment_roles_lambda': a_clean_environment_roles_lambda,
             'a_cross_account_assume_role': a_cross_account_assume_role,
             'a_service_portfolio_arn': a_service_portfolio.portfolio_arn
         }

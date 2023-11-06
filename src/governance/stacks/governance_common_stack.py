@@ -5,8 +5,11 @@ from aws_cdk import (
     Environment,
     RemovalPolicy,
     aws_dynamodb as dynamodb,
-    aws_iam as iam
+    aws_iam as iam,
+    aws_lambda as lambda_
 )
+
+from os import path
 
 from constructs import Construct
 
@@ -44,7 +47,7 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
                 type= dynamodb.AttributeType.STRING
             ),
             sort_key= dynamodb.Attribute(
-                name= 'datazone_consumer_project_id',
+                name= 'datazone_consumer_environment_id',
                 type= dynamodb.AttributeType.STRING
             ),
             billing_mode= dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -58,11 +61,11 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
             id= 'g_c_asset_subscriptions_table',
             table_name= GLOBAL_VARIABLES['governance']['g_c_asset_subscriptions_table_name'],
             partition_key= dynamodb.Attribute(
-                name= 'datazone_consumer_project_id', 
+                name= 'datazone_consumer_environment_id', 
                 type= dynamodb.AttributeType.STRING
             ),
             sort_key= dynamodb.Attribute(
-                name= 'datazone_asset_name',
+                name= 'datazone_asset_id',
                 type= dynamodb.AttributeType.STRING
             ),
             billing_mode= dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -76,7 +79,7 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
             id= 'g_c_secrets_mapping_table',
             table_name= GLOBAL_VARIABLES['governance']['g_c_secrets_mapping_table_name'],
             partition_key= dynamodb.Attribute(
-                name= 'datazone_producer_shared_secret_arn', 
+                name= 'shared_secret_arn', 
                 type= dynamodb.AttributeType.STRING
             ),
             billing_mode= dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -86,17 +89,17 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
         g_dynamodb_tables.append(g_c_secrets_mapping_table)
 
         # ----------------------- IAM for Account Cross-Account Access ---------------------------
-        a_common_lambda_role_name = GLOBAL_VARIABLES['account']['a_common_lambda_role_name']
         a_account_ids = governance_props['a_account_numbers']
         
         g_cross_account_assume_role = iam.Role(
             scope= self,
             id= 'g_cross_account_assume_role',
-            role_name= GLOBAL_VARIABLES['governance']['g_cross_account_assume_role'],
+            role_name= GLOBAL_VARIABLES['governance']['g_cross_account_assume_role_name'],
             assumed_by= iam.ServicePrincipal('lambda.amazonaws.com')
         )
 
         if a_account_ids:
+            a_common_lambda_role_name = GLOBAL_VARIABLES['account']['a_common_lambda_role_name']
             g_cross_account_assume_trust_policy = iam.PolicyStatement(
                 actions=["sts:AssumeRole"],
                 principals=[iam.AnyPrincipal()],
@@ -124,18 +127,44 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
             ]
         )
 
-        g_cross_account_assume_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('CloudWatchLogsFullAccess'))
         g_cross_account_assume_role.add_managed_policy(g_cross_account_assume_role_policy)
 
-        # ----------------------- IAM for Step Functions ---------------------------
+        # ----------------------- IAM for Lambda & Step Functions ---------------------------
+        g_common_lambda_role = iam.Role(
+            scope= self,
+            id= 'g_common_lambda_role',
+            role_name= 'dz_conn_g_common_lambda_role',
+            assumed_by= iam.ServicePrincipal('lambda.amazonaws.com')
+        )
+
+        g_common_lambda_policy = iam.ManagedPolicy(
+            scope= self,
+            id= 'g_common_lambda_policy',
+            managed_policy_name= 'g_common_lambda_policy',
+            statements= [
+                iam.PolicyStatement(
+                    actions=['datazone:GetEnvironment', 'datazone:GetEnvironmentBlueprint', 'datazone:GetListing', 'datazone:GetProject', 'datazone:GetEnvironment', 'datazone:GetEnvironmentProfile'],
+                    resources=[f'arn:aws:datazone:{region}:{account_id}:domain/*']
+                ),
+                iam.PolicyStatement(
+                    actions=['logs:CreateLogGroup'],
+                    resources=[f'arn:aws:logs:{region}:{account_id}:*']
+                ),
+                iam.PolicyStatement(
+                    actions=['logs:CreateLogStream', 'logs:PutLogEvents'],
+                    resources=[f'arn:aws:logs:{region}:{account_id}:log-group:/aws/lambda/dz_conn_g_*']
+                )
+            ]
+        )
+
+        g_common_lambda_role.add_managed_policy(g_common_lambda_policy)
+        
         g_common_sf_role = iam.Role(
             scope= self,
             id= 'g_common_sf_role',
             role_name= GLOBAL_VARIABLES['governance']['g_common_stepfunctions_role_name'],
             assumed_by= iam.ServicePrincipal('states.amazonaws.com')
         )
-        
-        g_common_sf_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('CloudWatchLogsFullAccess'))
 
         g_common_sf_policy = iam.ManagedPolicy(
             scope= self,
@@ -144,14 +173,31 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
             statements= [
                 iam.PolicyStatement(
                     actions=['lambda:InvokeFunction'],
-                    resources=[f'arn:aws:lambda:{region}:{account_id}:function:*']
+                    resources=[f'arn:aws:lambda:{region}:{account_id}:function:dz_conn_g_*']
                 ),
                 iam.PolicyStatement(
-                    actions=['sts:AssumeRole'],
-                    resources=['*']
+                    actions=['logs:CreateLogGroup', 'logs:DescribeLogGroups'],
+                    resources=[f'arn:aws:logs:{region}:{account_id}:*']
+                ),
+                iam.PolicyStatement(
+                    actions=['logs:CreateLogDelivery', 'logs:CreateLogStream', 'logs:GetLogDelivery', 'logs:UpdateLogDelivery', 'logs:ListLogDeliveries', 'logs:DeleteLogDelivery', 'logs:PutLogEvents', 'logs:PutResourcePolicy', 'logs:DescribeResourcePolicies'],
+                    resources=[f'arn:aws:logs:{region}:{account_id}:log-group:/aws/step-functions/dz_conn_g_*']
+                ),
+                iam.PolicyStatement(
+                    actions=['xray:PutTraceSegments', 'xray:PutTelemetryRecords', 'xray:GetSamplingRules', 'xray:GetSamplingTargets'],
+                    resources=[f'arn:aws:xray:{region}:{account_id}:*']
                 )
             ]
         )
+
+        if a_account_ids:
+            a_cross_account_assume_role_name = GLOBAL_VARIABLES['account']['a_cross_account_assume_role_name']
+            g_common_sf_assume_role_policy_statement = iam.PolicyStatement(
+                actions=["sts:AssumeRole"],
+                resources=[f'arn:aws:iam::{a_account_id}:role/{a_cross_account_assume_role_name}' for a_account_id in a_account_ids],
+            )
+
+            g_common_sf_policy.add_statements(g_common_sf_assume_role_policy_statement)
 
         g_common_sf_role.add_managed_policy(g_common_sf_policy)
 
@@ -159,7 +205,7 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
         g_common_eventbridge_role = iam.Role(
             scope= self,
             id= 'g_common_eventbridge_role',
-            role_name= GLOBAL_VARIABLES['governance']['g_common_eventbridge_role_name'],
+            role_name= 'dz_conn_g_common_eventbridge_role',
             assumed_by= iam.ServicePrincipal('events.amazonaws.com')
         )
 
@@ -170,18 +216,57 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
             statements= [
                 iam.PolicyStatement(
                     actions=['states:StartExecution'],
-                    resources=[f'arn:aws:states:{region}:{account_id}:stateMachine:*']
+                    resources=[f'arn:aws:states:{region}:{account_id}:stateMachine:dz_conn_g_*']
                 )
             ]
         )
 
         g_common_eventbridge_role.add_managed_policy(g_common_eventbridge_policy)
 
+        # ---------------- Lambda Layer ------------------------
+        g_boto3_layer = lambda_.LayerVersion(
+            scope=self, 
+            id='g_boto3_layer',
+            layer_version_name='dz_conn_g_boto3_layer',
+            code=lambda_.AssetCode('libs/python311/boto3-layer.zip'),
+            compatible_runtimes=[lambda_.Runtime.PYTHON_3_11]
+        )
+
+        # ---------------- Lambda ------------------------        
+        g_get_environment_details_lambda = lambda_.Function(
+            scope= self,
+            id= 'g_get_environment_details_lambda',
+            function_name= 'dz_conn_g_get_environment_details',
+            runtime= lambda_.Runtime.PYTHON_3_11,
+            code=lambda_.Code.from_asset(path.join('src/governance/code/lambda', "get_environment_details")),
+            handler= "get_environment_details.handler",
+            layers= [
+                g_boto3_layer
+            ],
+            role= g_common_lambda_role
+        )
+
+        g_get_subscription_details_lambda = lambda_.Function(
+            scope= self,
+            id= 'g_get_subscription_details_lambda',
+            function_name= 'dz_conn_g_get_subscription_details',
+            runtime= lambda_.Runtime.PYTHON_3_11,
+            code=lambda_.Code.from_asset(path.join('src/governance/code/lambda', "get_subscription_details")),
+            handler= "get_subscription_details.handler",
+            layers= [
+                g_boto3_layer
+            ],
+            role= g_common_lambda_role
+        )
+
         # -------------- Outputs --------------------
         self.outputs = {
             'g_p_source_subscriptions_table': g_p_source_subscriptions_table,
             'g_c_asset_subscriptions_table': g_c_asset_subscriptions_table,
             'g_c_secrets_mapping_table': g_c_secrets_mapping_table,
+            'g_common_lambda_role': g_common_lambda_role,
             'g_common_sf_role': g_common_sf_role,
             'g_common_eventbridge_role_name': g_common_eventbridge_role.role_name,
+            'g_get_environment_details_lambda': g_get_environment_details_lambda,
+            'g_get_subscription_details_lambda': g_get_subscription_details_lambda
         }

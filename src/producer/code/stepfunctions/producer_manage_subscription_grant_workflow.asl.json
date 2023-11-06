@@ -31,6 +31,10 @@
                 }
             ]
         },
+        "Unsupported connection type": {
+            "Type": "Fail",
+            "Error": "Unsupported connection type"
+        },
         "Grant JDBC subscription": {
             "Type": "Task",
             "Next": "Share subscription secret",
@@ -42,18 +46,17 @@
             "ResultPath": "$.GrantSubscriptionDetails",
             "ResultSelector": {
                 "ConnectionArn.$": "$.Payload.glue_connection_arn",
+                "DatazoneConsumerEnvironmentId.$": "$.Payload.datazone_consumer_environment_id",
                 "DatazoneConsumerProjectId.$": "$.Payload.datazone_consumer_project_id",
+                "DatazoneDomainId.$": "$.Payload.datazone_domain_id",
                 "SecretArn.$": "$.Payload.secret_arn",
                 "SecretName.$": "$.Payload.secret_name",
                 "DataAssets.$": "$.Payload.data_assets",
                 "OwnerAccount.$":  "$.Payload.owner_account",
+                "OwnerRegion.$":  "$.Payload.owner_region",
                 "LastUpdated.$":  "$.Payload.last_updated",
                 "NewSubscriptionSecret.$":  "$.Payload.new_subscription_secret"
             }
-        },
-        "Unsupported connection type": {
-            "Type": "Fail",
-            "Error": "Unsupported connection type"
         },
         "Share subscription secret": {
             "Type": "Task",

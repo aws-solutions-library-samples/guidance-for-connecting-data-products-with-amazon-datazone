@@ -2,11 +2,15 @@ from config.common.global_vars import GLOBAL_VARIABLES
 
 from aws_cdk import (
     Environment,
+    RemovalPolicy,
     aws_stepfunctions as stepfunctions,
     aws_events as events,
     aws_events_targets as event_targets,
-    aws_iam as iam
+    aws_iam as iam,
+    aws_logs as logs
 )
+
+from os import path
 
 from constructs import Construct
 
@@ -41,18 +45,32 @@ class GovernanceManageSubscriptionGrantWorkflowConstruct(Construct):
         account_id, region = governance_props['account_id'], governance_props['region']
         
         # ---------------- Step Functions ------------------------    
+        g_manage_subscription_grant_state_machine_name = 'dz_conn_g_manage_subscription_grant'
+        
+        g_manage_subscription_grant_state_machine_logs = logs.LogGroup(
+            scope= self,
+            id= 'g_manage_subscription_grant_state_machine_logs',
+            log_group_name=f'/aws/step-functions/{g_manage_subscription_grant_state_machine_name}',
+            removal_policy=RemovalPolicy.DESTROY
+        )
+        
         g_manage_subscription_grant_state_machine = stepfunctions.StateMachine(
             scope= self,
             id= 'g_manage_subscription_grant_state_machine',
-            state_machine_name= 'dz_conn_g_manage_subscription_grant',
+            state_machine_name= g_manage_subscription_grant_state_machine_name,
             definition_body=stepfunctions.DefinitionBody.from_file('src/governance/code/stepfunctions/governance_manage_subscription_grant_workflow.asl.json'),
             definition_substitutions= {
-                'region': region,
+                'g_get_subscription_details_lambda_arn': common_constructs['g_get_subscription_details_lambda'].function_arn,
                 'p_manage_subscription_grant_state_machine_name': GLOBAL_VARIABLES['producer']['p_manage_subscription_grant_state_machine_name'],
                 'c_manage_subscription_grant_state_machine_name': GLOBAL_VARIABLES['consumer']['c_manage_subscription_grant_state_machine_name'],
                 'a_cross_account_assume_role_name': GLOBAL_VARIABLES['account']['a_cross_account_assume_role_name'],
             },
-            role=common_constructs['g_common_sf_role']
+            role=common_constructs['g_common_sf_role'],
+            logs= stepfunctions.LogOptions(
+                destination=g_manage_subscription_grant_state_machine_logs,
+                level=stepfunctions.LogLevel.ALL
+            ),
+            tracing_enabled=True
         )
 
         # --------------- EventBridge ---------------------------
@@ -69,11 +87,7 @@ class GovernanceManageSubscriptionGrantWorkflowConstruct(Construct):
             enabled=workflow_props['g_eventbridge_rule_enabled'],
             event_pattern=events.EventPattern(
                 source=['aws.datazone'],
-                detail_type=['Subscription State Change'],
-                detail={
-                    'action': ['APPROVED'],
-                    'dataAssetSourceType': ['GLUE']
-                }
+                detail_type=['Subscription Grant Completed']
             )
         )
 

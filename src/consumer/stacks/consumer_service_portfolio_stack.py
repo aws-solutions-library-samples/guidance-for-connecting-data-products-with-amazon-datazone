@@ -75,7 +75,7 @@ class ConsumerServicePortfolioStack(Stack):
                 ),
                 iam.PolicyStatement(
                     actions=['lambda:*Function', 'lambda:TagResource', 'lambda:UntagResource'],
-                    resources=[f'arn:aws:lambda:{region}:{account_id}:function:proj-*']
+                    resources=[f'arn:aws:lambda:{region}:{account_id}:function:*']
                 ),
                 iam.PolicyStatement(
                     actions=['athena:*DataCatalog'],
@@ -229,6 +229,12 @@ class AthenaJDBCConnectorProduct(servicecatalog.ProductStack):
             id= 'ConnectionNameSuffix',
             description= 'Name suffix to include in the connection name' 
         )
+
+        c_datazone_domain_id_param = CfnParameter(
+            scope= self,
+            id= 'DataZoneDomainId',
+            description= 'Id of the Amazon DataZone domain where project belongs' 
+        )
         
         c_datazone_project_id_param = CfnParameter(
             scope= self,
@@ -236,10 +242,10 @@ class AthenaJDBCConnectorProduct(servicecatalog.ProductStack):
             description= 'Id of the Amazon DataZone project from which connector will be accessed' 
         )
 
-        c_datazone_project_bucket_name_param = CfnParameter(
+        c_datazone_environment_id_param = CfnParameter(
             scope= self,
-            id= 'DataZoneProjectBucketName',
-            description= 'Name of the S3 bucket associated to the Amazon DataZone project from which connector will be accessed'
+            id= 'DataZoneEnvironmentId',
+            description= 'Id of the Amazon DataZone environment from which connector will be accessed' 
         )
 
         c_host_param = CfnParameter(
@@ -284,8 +290,9 @@ class AthenaJDBCConnectorProduct(servicecatalog.ProductStack):
         # -------------- Consolidated Parameters -------------------
         self.c_connection_props = {
             'connection_name_suffix': c_connection_name_suffix_param.value_as_string,
+            'datazone_domain_id': c_datazone_domain_id_param.value_as_string,
             'datazone_project_id': c_datazone_project_id_param.value_as_string,
-            'datazone_project_bucket_name': c_datazone_project_bucket_name_param.value_as_string,
+            'datazone_environment_id': c_datazone_environment_id_param.value_as_string,
             'host': c_host_param.value_as_string,
             'port': c_port_param.value_as_string,
             'db_name': c_db_name_param.value_as_string,
@@ -341,18 +348,18 @@ class AthenaSqlServerJDBCConnectorProduct(AthenaJDBCConnectorProduct):
         super().__init__(scope, id, account_props, default_props, env, **kwargs)
 
         # ------------- Parameters --------------------
-        c_ssl_param = CfnParameter(
-            scope= self,
-            id= 'ConnectionSsl',
-            description= 'If connection to source database should use SSL',
-            default = default_props['ssl']
-        )
+        # c_ssl_param = CfnParameter(
+        #     scope= self,
+        #     id= 'ConnectionSsl',
+        #     description= 'If connection to source database should use SSL',
+        #     default = default_props['ssl']
+        # )
 
         # -------------- Consolidated Parameters -------------------
-        self.c_connection_props = {
-            **self.c_connection_props,
-            'ssl': c_ssl_param.value_as_string
-        }
+        # self.c_connection_props = {
+        #     **self.c_connection_props,
+        #     'ssl': c_ssl_param.value_as_string
+        # }
         
         c_athena_sqlserver_jdbc_connector_construct = AthenaSqlServerJDBCConnectorConstruct(
             scope= self,

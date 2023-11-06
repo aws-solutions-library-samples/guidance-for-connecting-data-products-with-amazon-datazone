@@ -18,9 +18,9 @@ def handler(event, context):
     Parameters
     ----------
     event: dict - Input event dict containing:
-        EventDetails: dict - Dict containing details including:
-            sourceDatabaseName: str - Name of the glue data catalog source database where subscribed asset is located
-            sourceTableName: str - Name of the table in the glue catalog that the subscription is pointing to
+        SubscriptionDetails: dict - Dict containing subscription details including:
+            AssetDetails.GlueTableDetails.DatabaseName: str - Name of the glue data catalog source database where subscribed asset is located
+            AssetDetails.GlueTableDetails.TableName: str - Name of the table in the glue catalog that the subscription is pointing to
 
     context: dict - Input context. Not used on function
 
@@ -36,12 +36,11 @@ def handler(event, context):
              SECRET_ID: str - ARN of the secret with credential used by glue connection to connect to source database
         ConnectionAssetName: str - Name of the asset on source database mapped to subscribed table in Glue catalog
         ConnectionCrawlerName: str - Name of the crawler the retrieved subscribed asset
-    """
-
-    event_details = event['EventDetails']
+    """    
+    subscription_details = event['SubscriptionDetails']
     
-    glue_database_name = event_details['sourceDatabaseName']
-    glue_table_name = event_details['sourceTableName']
+    glue_database_name = subscription_details['AssetDetails']['GlueTableDetails']['DatabaseName']
+    glue_table_name = subscription_details['AssetDetails']['GlueTableDetails']['TableName']
 
     glue_response = glue.get_table(
         DatabaseName=glue_database_name,

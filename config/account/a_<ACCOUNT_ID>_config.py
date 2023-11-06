@@ -1,5 +1,4 @@
 # ------------------ Account ------------------------
-
 """
 ACCOUNT_PROPS dict will be used to consolidate common properties for an account with producer / consumer capabilities.
 The dict structures includes:
@@ -12,6 +11,8 @@ The dict structures includes:
         availability_zones: list - List of Availability Zones covering the vpc
         private_subnets: list - List of subnet ids of the vpc
         security_groups: list - List of security groups of the vpc
+    s3: dict - Dict containing properties for account S3 setup including:
+        bucket_name: str - Name of the bucket to be created by solution to store data associated to its use.
 """
 ACCOUNT_PROPS = {
     'account_id': '',
@@ -24,16 +25,18 @@ ACCOUNT_PROPS = {
         'availability_zones': [],
         'private_subnets': [],
         'security_groups': []
+    },
+    's3': {
+        'bucket_name': 'dz-conn-a-<ACCOUNT_ID>-<REGION>'
     }
 }
 
 # ------------------ Producer ------------------------ 
-
 """
 PRODUCER_PROPS dict will be used to consolidate common producer-related properties for an account.
 The dict structures includes:
     p_lakeformation_tag_principals: dict - Dict containing properties for lake formation tag principals. Each key represents a principal; key (assigned by you) will be used as resource physical id and value is a dict including:
-        type_name: str - IAM principal type and name in the format '{PRINCIPAL_TYPE}/{PRINCIPAL_NAME}'. For example 'role/Admin'.
+        type_name: str - IAM principal type and name in the format '{PRINCIPAL_TYPE}/{PRINCIPAL_NAME_PATH}'. For example 'role/Admin'.
         lf_tag_permission: bool - If principal should have admin permission on top of the lake formation tag deployed as part of the solution.
         lf_tag_objects_permission: bool - If principal should have admin permission on top of objects tagged with the lake formation tag deployed as part of the solution.
 """
@@ -107,7 +110,6 @@ PRODUCER_SERVICE_PORTFOLIO_PROPS = {
 }
 
 # ------------------ Consumer ------------------------
-
 """
 CONSUMER_WORKFLOW_PROPS dict will be used to consolidate consumer workflow properties for an account.
 The dict structures includes a key (not to be modified) per workflow:

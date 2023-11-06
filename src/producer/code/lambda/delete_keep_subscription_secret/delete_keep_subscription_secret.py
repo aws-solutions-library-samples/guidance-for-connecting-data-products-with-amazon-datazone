@@ -16,8 +16,7 @@ def handler(event, context):
     Parameters
     ----------
     event: dict - Input event dict containing:
-        EventDetails: dict - Dict containing details. Not used on function
-        UnsubscriptionDetails: dict - Dict containing un-subscription details including:
+        RevokeSubscriptionDetails: dict - Dict containing revoke subscription details including:
             SecretName: str - Name of producer local subscription secret.
             DeleteSecret: str - If subscription user was deleted so that associated secret is deleted as well. 
 
@@ -26,31 +25,30 @@ def handler(event, context):
     Returns
     -------
     response: dict - Dict with response details including:
-        secret_arn: str - Arn of the deleted secret local to the producer account
         secret_name: str - Name of the deleted secret local to the producer account
+        secret_arn: str - Arn of the deleted secret local to the producer account
         secret_deleted: str - 'true' or 'false' depending if secret was deleted or not
         secret_deletion_date: str - Date of secret deletion
         secret_recovery_window_in_days: str - Secret recovery window in days
     """
 
-    event_details = event['EventDetails']
-    unsubscription_details = event['RevokeSubscriptionDetails']
-    unsubscription_secret_name = unsubscription_details['SecretName']
-    unsubscription_delete_secret = unsubscription_details['DeleteSecret']
+    revoke_subscription_details = event['RevokeSubscriptionDetails']
+    revoke_subscription_secret_name = revoke_subscription_details['SecretName']
+    revoke_subscription_delete_secret = revoke_subscription_details['DeleteSecret']
 
-    if unsubscription_delete_secret:
-        secrets_manager_response = delete_secret(unsubscription_secret_name)
+    if revoke_subscription_delete_secret:
+        secrets_manager_response = delete_secret(revoke_subscription_secret_name)
     else:
         secrets_manager_response = secrets_manager.describe_secret(
-            SecretId= unsubscription_secret_name
+            SecretId= revoke_subscription_secret_name
         )
 
     response = {
         'secret_name': secrets_manager_response['Name'],
         'secret_arn': secrets_manager_response['ARN'],
-        'secret_deleted': 'true' if unsubscription_delete_secret else 'false',
-        'secret_deletion_date': secrets_manager_response['DeletionDate'] if unsubscription_delete_secret else None,
-        'secret_recovery_window_in_days': RECOVERY_WINDOW_IN_DAYS if unsubscription_delete_secret else None
+        'secret_deleted': 'true' if revoke_subscription_delete_secret else 'false',
+        'secret_deletion_date': secrets_manager_response['DeletionDate'] if revoke_subscription_delete_secret else 'None',
+        'secret_recovery_window_in_days': RECOVERY_WINDOW_IN_DAYS if revoke_subscription_delete_secret else 'None'
     }
 
     return response

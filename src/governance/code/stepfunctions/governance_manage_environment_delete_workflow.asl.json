@@ -1,0 +1,85 @@
+{
+    "Comment": "State machine to orchestrate activities to manage environment delete event in environments's account",
+    "StartAt": "Get Environment Details",
+    "States": {
+        "Get Environment Details": {
+            "Type": "Task",
+            "Next": "Which status?",
+            "Parameters": {
+                "FunctionName": "${g_get_environment_details_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.EnvironmentDetails",
+            "ResultSelector": {
+                "AccountId.$": "$.Payload.AccountId",
+                "Region.$": "$.Payload.Region",
+                "DomainId.$": "$.Payload.DomainId",
+                "ProjectId.$": "$.Payload.ProjectId",
+                "EnvironmentId.$": "$.Payload.EnvironmentId",
+                "EnvironmentName.$": "$.Payload.EnvironmentName",
+                "EnvironmentStatus.$": "$.Payload.EnvironmentStatus",
+                "EnvironmentBlueprintId.$": "$.Payload.EnvironmentBlueprintId",
+                "EnvironmentBlueprintName.$": "$.Payload.EnvironmentBlueprintName",
+                "EnvironmentResources.$": "$.Payload.EnvironmentResources"
+            }
+        },
+        "Which status?": {
+            "Type": "Choice",
+            "Default": "Not deleting",
+            "Choices": [
+                {
+                    "Next": "Which environment profile?",
+                    "StringEquals": "DELETING",
+                    "Variable": "$.EnvironmentDetails.EnvironmentStatus"
+                }
+            ]
+        },
+        "Not deleting": {
+            "Type": "Pass",
+            "End": true,
+            "ResultPath": null
+        },
+        "Which environment profile?": {
+            "Type": "Choice",
+            "Default": "Unsupported environment profile",
+            "Choices": [
+                {
+                    "Next": "Get cross-account resource ARNs",
+                    "StringEquals": "DefaultDataLake",
+                    "Variable": "$.EnvironmentDetails.EnvironmentBlueprintName"
+                }
+            ]
+        },
+        "Unsupported environment profile": {
+            "Type": "Pass",
+            "End": true,
+            "ResultPath": null
+        },
+        "Get cross-account resource ARNs": {
+            "Type": "Pass",
+            "Next": "Clean Environment Roles",
+            "Parameters": {
+                "CleanEnvironmentRolesLambdaArn.$": "States.Format('arn:aws:lambda:{}:{}:function:${a_clean_environment_roles_lambda_name}', $.EnvironmentDetails.Region, $.EnvironmentDetails.AccountId)",
+                "AccountAssumeRoleArn.$": "States.Format('arn:aws:iam::{}:role/${a_cross_account_assume_role_name}', $.EnvironmentDetails.AccountId)"
+            },
+            "ResultPath": "$.CrossAccountResources"
+        },
+        "Clean Environment Roles": {
+            "Type": "Task",
+            "End": true,
+            "Parameters": {
+                "FunctionName.$": "$.CrossAccountResources.CleanEnvironmentRolesLambdaArn",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Credentials": {
+                "RoleArn.$": "$.CrossAccountResources.AccountAssumeRoleArn"
+            },
+            "ResultPath": "$.AccountCleanEnvironmentRolesDetails",
+            "ResultSelector": {
+                "EnvironmentRoleArn.$": "$.Payload.environment_role_arn"
+            }
+        }
+    }
+}

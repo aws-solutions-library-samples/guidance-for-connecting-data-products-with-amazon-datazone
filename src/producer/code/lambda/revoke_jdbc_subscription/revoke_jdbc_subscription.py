@@ -41,9 +41,10 @@ def handler(event, context):
     Parameters
     ----------
     event: dict - Input event dict containing:
-        EventDetails: dict - Dict containing details including:
-            authorizedPrincipals: list - List of dicts containing subscription principals details including:
-                id: str - DataZone project id
+        SubscriptionDetails: dict - Dict containing details including:
+            DomainId: str - DataZone domain id
+            ConsumerProjectDetails.ProjectId: str - DataZone project id subscribing to the data asset
+            ConsumerProjectDetails.EnvironmentId: str - DataZone environment id subscribing to the data asset
         ConnectionDetails: dict - Dict containing glue connection details including:
             ConnectionArn: str - ARN of the glue connection associated to the subscribed asset.
             ConnectionAssetName: str - Name of the asset on source database mapped to subscribed table in Glue catalog
@@ -57,22 +58,29 @@ def handler(event, context):
     -------
     subscription_item: dict - Dict with source connection subscription item details including:
         glue_connection_arn: str - ARN of the glue connection associated to the subscribed asset
-        datazone_consumer_project_id: str - Id of DataZone project that subscribed to the asset
+        datazone_consumer_environment_id: str - Id of DataZone environment that was subscribed to the asset
+        datazone_consumer_project_id: str - Id of DataZone project that was subscribed to the asset
+        datazone_domain_id: str - Id of DataZone domain
         secret_arn: str - ARN of the secret (local to the producer account) that can be used to access the subscribed asset
         secret_name: str - Name of the secret (local to the producer account) that can be used to access the subscribed asset
         data_assets: list - List of data assets on source database that can be accessed through the same subscription secret
         owner_account: str - Id of the account that owns the item
+        owner_region: str - Region that owns the item
         last_updated: str - Datetime of last update performed on the item
         delete_secret: bool - If subscription user was deleted so that associated secret is deleted as well on following steps. 
     """
 
-    # Get subscription event and glue connection details
-    event_details = event['EventDetails']
+    # Get domain, consumer project and glue connection details
+    subscription_details = event['SubscriptionDetails']
     glue_connection_details = event['ConnectionDetails']
+
+    domain_id = subscription_details['DomainId']
+    consumer_project_details = subscription_details['ConsumerProjectDetails']
     
-    # Get subscription project and stablish user / password if new
-    subscription_consumer_project = event_details['authorizedPrincipals'][0]['id']
-    subscription_user = subscription_consumer_project.replace('proj-', 'dz')[0:16]
+    # Get subscription project and stablish user
+    consumer_project_id = consumer_project_details['ProjectId']
+    consumer_environment_id = consumer_project_details['EnvironmentId']
+    subscription_user = f'dz_{consumer_environment_id}'
 
     # # Get connection elements from glue connection
     glue_connection_arn = glue_connection_details['ConnectionArn']
@@ -87,7 +95,7 @@ def handler(event, context):
     glue_connection_asset_name = glue_connection_details['ConnectionAssetName']
 
     # Get subscription record and remove unsubscribed data asset
-    subscription_item = get_subscription_item(glue_connection_arn, subscription_consumer_project)
+    subscription_item = get_subscription_item(glue_connection_arn, consumer_environment_id)
     subscription_item['data_assets'].remove(glue_connection_asset_name)
     
     # Stablish connection to source, revoke access to data asset and delete user if no subscribed assets left
@@ -96,26 +104,26 @@ def handler(event, context):
     revoke_asset_delete_user(glue_connection_engine, source_connection, subscription_user, glue_connection_asset_name, delete_subscription_user_and_secret)
     
     # Delete or update subscription record in DynamoDB
-    if delete_subscription_user_and_secret: delete_subscription_item(glue_connection_arn, subscription_consumer_project)
+    if delete_subscription_user_and_secret: delete_subscription_item(glue_connection_arn, consumer_environment_id)
     else:
-        subscription_secret_name = subscription_item['secret_arn']
+        subscription_secret_arn = subscription_item['secret_arn']
         subscription_secret_name = subscription_item['secret_name']
         subscription_data_assets = subscription_item['data_assets']
-        subscription_item = update_subscription_item(glue_connection_arn, subscription_consumer_project, subscription_secret_name, subscription_secret_name, subscription_data_assets)
+        subscription_item = update_subscription_item(glue_connection_arn, consumer_environment_id, consumer_project_id, domain_id, subscription_secret_arn, subscription_secret_name, subscription_data_assets)
     
     subscription_item['delete_secret'] = delete_subscription_user_and_secret
     
     return subscription_item
 
 
-def get_subscription_item(glue_connection_arn, datazone_consumer_project_id):
+def get_subscription_item(glue_connection_arn, consumer_environment_id):
     """ Complementary function to get item with source connection subscription details in respective governance DynamoDB table if existent, else None"""
 
     dynamodb_response = dynamodb.get_item(
         TableName= G_P_SOURCE_SUBSCRIPTIONS_TABLE_NAME,
         Key= {
             'glue_connection_arn': dynamodb_serializer.serialize(glue_connection_arn),
-            'datazone_consumer_project_id': dynamodb_serializer.serialize(datazone_consumer_project_id)
+            'datazone_consumer_environment_id': dynamodb_serializer.serialize(consumer_environment_id)
         }
     )
     
@@ -126,24 +134,26 @@ def get_subscription_item(glue_connection_arn, datazone_consumer_project_id):
     return subscription_item
 
 
-def delete_subscription_item(glue_connection_arn, datazone_consumer_project_id):
+def delete_subscription_item(glue_connection_arn, consumer_environment_id):
     """ Complementary function to delete item with source connection subscription details in respective governance DynamoDB table"""
     
     dynamodb_response = dynamodb.delete_item(
         TableName=G_P_SOURCE_SUBSCRIPTIONS_TABLE_NAME,
         Key= {
             'glue_connection_arn': dynamodb_serializer.serialize(glue_connection_arn),
-            'datazone_consumer_project_id': dynamodb_serializer.serialize(datazone_consumer_project_id),
+            'datazone_consumer_environment_id': dynamodb_serializer.serialize(consumer_environment_id),
         }
     )
 
 
-def update_subscription_item(glue_connection_arn, datazone_consumer_project_id, secret_arn, secret_name, data_assets):
+def update_subscription_item(glue_connection_arn, consumer_environment_id, consumer_project_id, domain_id, secret_arn, secret_name, data_assets):
     """ Complementary function to update item with source connection subscription details in respective governance DynamoDB table"""
 
     subscription_item = {
         'glue_connection_arn': glue_connection_arn,
-        'datazone_consumer_project_id':  datazone_consumer_project_id,
+        'datazone_consumer_environment_id':  consumer_environment_id,
+        'datazone_consumer_project_id':  consumer_project_id,
+        'datazone_domain_id': domain_id,
         'secret_arn': secret_arn,
         'secret_name': secret_name,
         'data_assets': data_assets,

@@ -27,7 +27,9 @@ class AthenaJDBCConnectorConstruct(Construct):
 
         connection_props : dict
             dict with required properties for workflow creation, including:
+                datazone_domain_id: str - Id of the Amazon DataZone domain
                 datazone_project_id: str - Id of the Amazon DataZone project that will be associated to the athena connection
+                datazone_environment_id: str - Id of the Amazon DataZone environment that will be associated to the athena connection
                 datazone_project_bucket_name: str - Name of the bucket assigned to the Amazon DataZone project that will be associated to the athena connection
                 connection_name_suffix: str - Suffix that will be used in connection name
                 host: str - Host url of the JDBC source
@@ -44,16 +46,20 @@ class AthenaJDBCConnectorConstruct(Construct):
         super().__init__(scope, construct_id, **kwargs)
         account_id, region = account_props['account_id'], account_props['region']
         
+        datazone_domain_id = connection_props['datazone_domain_id']
         datazone_project_id = connection_props['datazone_project_id']
-        datazone_project_bucket_name = connection_props['datazone_project_bucket_name']
+        datazone_environment_id = connection_props['datazone_environment_id']
         connection_name_suffix = connection_props['connection_name_suffix']
         secret_name = connection_props['secret_name']
         security_group_ids = connection_props['security_group_ids']
         subnet_ids = connection_props['subnet_ids']
 
-        connection_name = f'{datazone_project_id}-{connection_name_suffix}'
+        connection_name = f'{datazone_project_id}-{datazone_environment_id}-{connection_name_suffix}'
         lambda_function_name = f'{connection_name}-lambda'
+
+        datazone_project_bucket_name = account_props['s3']['bucket_name']
         spill_bucket_arn = f"arn:aws:s3:::{datazone_project_bucket_name}"
+        spill_prefix = f'datazone/{datazone_domain_id}/{datazone_project_id}/{datazone_environment_id}/consumer/{lambda_function_name}'
         
         # ------------------ IAM -------------------
         connection_lambda_policy = iam.ManagedPolicy(
@@ -67,7 +73,7 @@ class AthenaJDBCConnectorConstruct(Construct):
                 ),
                 iam.PolicyStatement(
                     actions=['s3:*'],
-                    resources=[spill_bucket_arn, f'{spill_bucket_arn}/{lambda_function_name}/*']
+                    resources=[spill_bucket_arn, f'{spill_bucket_arn}/{spill_prefix}/*']
                 ),
                 iam.PolicyStatement(
                     actions=['ec2:ModifyNetworkInterfaceAttribute', 'ec2:CreateNetworkInterface', 'ec2:DeleteNetworkInterface'],
@@ -82,7 +88,8 @@ class AthenaJDBCConnectorConstruct(Construct):
                     resources=[f'arn:aws:secretsmanager:{region}:{account_id}:secret:{secret_name}*'],
                     conditions={ 
                         'StringEquals': {
-                            'aws:ResourceTag/datazone:projectId': datazone_project_id
+                            'aws:ResourceTag/AmazonDataZoneDomain': datazone_domain_id,
+                            'aws:ResourceTag/AmazonDataZoneProject': datazone_project_id
                         }
                     }
                 ),
@@ -111,7 +118,7 @@ class AthenaJDBCConnectorConstruct(Construct):
             'LambdaFunctionName': lambda_function_name,
             'SecretNamePrefix': secret_name,
             'SpillBucket': datazone_project_bucket_name,
-            'SpillPrefix': lambda_function_name,
+            'SpillPrefix': spill_prefix,
             'SecurityGroupIds': security_group_ids,
             'SubnetIds': subnet_ids
         }
@@ -128,7 +135,9 @@ class AthenaJDBCConnectorConstruct(Construct):
             ),
             parameters=connection_parameters,
             tags= {
-                'datazone:projectId': datazone_project_id
+                'AmazonDataZoneDomain': datazone_domain_id,
+                'AmazonDataZoneProject': datazone_project_id,
+                'AmazonDataZoneEnvironment': datazone_environment_id
             }
         )
 
@@ -219,10 +228,11 @@ class AthenaSqlServerJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
         host = connection_props['host']
         port = connection_props['port']
         db_name = connection_props['db_name']
-        ssl = connection_props['ssl']
+        # ssl = connection_props['ssl']
         secret_name = connection_props['secret_name']
         
-        self.source_connection_string = f'sqlserver://jdbc:sqlserver://{host}:{port};databaseName={db_name};encrypt={ssl};${{{secret_name}}}'
+        self.source_connection_string = f'sqlserver://jdbc:sqlserver://{host}:{port};databaseName={db_name};${{{secret_name}}}'
+        # self.source_connection_string = f'sqlserver://jdbc:sqlserver://{host}:{port};databaseName={db_name};encrypt={ssl};${{{secret_name}}}'
         self.source_permission_boundary = False
         
         super().__init__(scope, construct_id, account_props, connection_props, env, **kwargs)

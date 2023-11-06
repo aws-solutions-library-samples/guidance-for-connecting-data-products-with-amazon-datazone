@@ -38,8 +38,7 @@ def handler(event, context):
     Parameters
     ----------
     event: dict - Input event dict containing:
-        EventDetails: dict - Dict containing details. Not used on function
-        DeleteKeepSubscriptionSecretDetails: dict - Dict containing delete / keep subscription details including:
+        ProducerRevokeDetails: dict - Dict containing producer subscription revoke details including:
             SecretArn: str - Arn of producer shared subscription secret associated to the local consumer (to be deleted) secret.
 
     context: dict - Input context. Not used on function
@@ -47,23 +46,21 @@ def handler(event, context):
     Returns
     -------
     response: dict - Dict with response details including:
-        secret_arn: str - Arn of the deleted secret local to the consumer account
         secret_name: str - Name of the deleted secret local to the consumer account
+        secret_arn: str - Arn of the deleted secret local to the consumer account
         secret_deleted: str - 'True' flag to confirm secret deletion
         secret_deletion_date: str - Date of secret deletion
         secret_recovery_window_in_days: str - Secret recovery window in days
     """
+    producer_revoke_details = event['ProducerRevokeDetails']
 
-    event_details = event['EventDetails']
-    delete_keep_subscription_secret_details = event['DeleteKeepSubscriptionSecretDetails']
+    shared_secret_arn = producer_revoke_details['SecretArn']
+    secret_association_item = get_secret_association_item(shared_secret_arn)
 
-    shared_subscription_secret_arn = delete_keep_subscription_secret_details['SecretArn']
-    secret_association_item = get_secret_association_item(shared_subscription_secret_arn)
+    secret_name = secret_association_item['secret_name']
 
-    project_secret_name = secret_association_item['secret_name']
-
-    secrets_manager_response = delete_secret(project_secret_name)
-    delete_secret_association_item(shared_subscription_secret_arn)
+    secrets_manager_response = delete_secret(secret_name)
+    delete_secret_association_item(shared_secret_arn)
     
     response = {
         'secret_name': secrets_manager_response['Name'],
@@ -76,12 +73,12 @@ def handler(event, context):
     return response
 
 
-def get_secret_association_item(producer_secret_arn):
+def get_secret_association_item(shared_secret_arn):
     """ Complementary function to get item with secret mapping details in respective governance DynamoDB table"""
 
     dynamodb_response = dynamodb.get_item(
         TableName=G_C_SECRETS_MAPPING_TABLE_NAME,
-        Key={ 'datazone_producer_shared_secret_arn': dynamodb_serializer.serialize(producer_secret_arn) }
+        Key={ 'shared_secret_arn': dynamodb_serializer.serialize(shared_secret_arn) }
     )
 
     secret_association_item = {key: dynamodb_deserializer.deserialize(value) for key, value in dynamodb_response['Item'].items()}
@@ -89,12 +86,12 @@ def get_secret_association_item(producer_secret_arn):
     return secret_association_item
 
 
-def delete_secret_association_item(producer_secret_arn):
+def delete_secret_association_item(shared_secret_arn):
     """ Complementary function to delete item with secret mapping details in respective governance DynamoDB table"""
 
     dynamodb_response = dynamodb.delete_item(
         TableName=G_C_SECRETS_MAPPING_TABLE_NAME,
-        Key={ 'datazone_producer_shared_secret_arn': dynamodb_serializer.serialize(producer_secret_arn) }
+        Key={ 'shared_secret_arn': dynamodb_serializer.serialize(shared_secret_arn) }
     )
 
 

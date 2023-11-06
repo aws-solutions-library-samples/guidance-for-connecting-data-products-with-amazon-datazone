@@ -11,15 +11,15 @@ C_ROLE_NAME = os.getenv('C_ROLE_NAME')
 secrets_manager = boto3.client('secretsmanager')
 
 def handler(event, context):
-    """ Function handler: Function that will share subscription secret by 1/ Adding a resource policy that allows access by consumer project account(s) (specific target role)
+    """ Function handler: Function that will share subscription secret by 1/ Adding a resource policy that allows access by consumer environment account (specific target role)
     when secret is new. When is an already shared secret it won't do anything.
 
     Parameters
     ----------
     event: dict - Input event dict containing:
-        EventDetails: dict - Dict containing details including:
-            projectRoles: list - List of consumer project role ARNs
-        SubscriptionDetails: dict - Dict containing subscription details including:
+        SubscriptionDetails: dict - Dict containing details including:
+            ConsumerProjectDetails.AccountId: str - Account id of the DataZone environment subscribing to the data asset
+        GrantSubscriptionDetails: dict - Dict containing grant subscription details including:
             SecretName: str - Name of subscription secret to be shared.
             NewSubscriptionSecret: bool - If subscription secret was newly created or not (reused and already shared).
 
@@ -31,57 +31,44 @@ def handler(event, context):
         secret_arn: str - Arn of the copied secret local to the consumer account
         secret_name: str - Name of the copied secret local to the consumer account
         new_subscription_secret: bool - If subscription secret was newly created or not (reused and already shared).
-        subscription_consumer_roles: list - List or ARNs for roles that can access the secret on the consumer account
+        subscription_consumer_role: str - ARN of the role that can access the secret on the consumer account
     """
+    subscription_details = event['SubscriptionDetails']
+    grant_subscription_details = event['GrantSubscriptionDetails']
     
-    event_details = event['EventDetails']
-    subscription_consumer_project_roles = event_details['projectRoles']
+    consumer_project_details = subscription_details['ConsumerProjectDetails']
+    consumer_account_id = consumer_project_details['AccountId']
+    subscription_consumer_roles = [f'arn:aws:iam::{consumer_account_id}:role/{C_ROLE_NAME}']
 
-    subscription_consumer_roles = []
-    for subscription_reference_role in subscription_consumer_project_roles:
-        subscription_consumer_role_base_arn = subscription_reference_role.split('/')[0]
-        subscription_consumer_role = f'{subscription_consumer_role_base_arn}/{C_ROLE_NAME}'
+    subscription_secret_name = grant_subscription_details['SecretName']
+    new_subscription_secret = grant_subscription_details['NewSubscriptionSecret']
         
-        if subscription_consumer_role not in subscription_consumer_roles:
-             subscription_consumer_roles.append(subscription_consumer_role)
-
-    subscription_details = event['GrantSubscriptionDetails']
-    subscription_secret_name = subscription_details['SecretName']
-    new_subscription_secret = subscription_details['NewSubscriptionSecret']
-
-    if new_subscription_secret:
-        
-        subscription_secret_resource_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "AWS": f"arn:aws:iam::{ACCOUNT_ID}:root"
-                    },
-                    "Action": "secretsmanager:*",
-                    "Resource": "*"
+    subscription_secret_resource_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": f"arn:aws:iam::{ACCOUNT_ID}:root"
                 },
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "AWS": subscription_consumer_roles
-                    },
-                    "Action": "secretsmanager:GetSecretValue",
-                    "Resource": "*"
-                }
-            ]
-        }
+                "Action": "secretsmanager:*",
+                "Resource": "*"
+            },
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": subscription_consumer_roles
+                },
+                "Action": "secretsmanager:GetSecretValue",
+                "Resource": "*"
+            }
+        ]
+    }
 
-        secrets_manager_response = secrets_manager.put_resource_policy(
-            SecretId= subscription_secret_name,
-            ResourcePolicy= json.dumps(subscription_secret_resource_policy)
-        )
-    
-    else:
-        secrets_manager_response = secrets_manager.describe_secret(
-            SecretId= subscription_secret_name
-        )
+    secrets_manager_response = secrets_manager.put_resource_policy(
+        SecretId= subscription_secret_name,
+        ResourcePolicy= json.dumps(subscription_secret_resource_policy)
+    )
 
     response = {
         'secret_name': secrets_manager_response['Name'],

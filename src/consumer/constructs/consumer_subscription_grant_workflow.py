@@ -2,8 +2,10 @@ from config.common.global_vars import GLOBAL_VARIABLES
 
 from aws_cdk import (
     Environment,
+    RemovalPolicy,
     aws_lambda as lambda_,
     aws_stepfunctions as stepfunctions,
+    aws_logs as logs
 )
 
 from os import path;
@@ -44,16 +46,17 @@ class ConsumerManageSubscriptionGrantWorkflowConstruct(Construct):
             scope= self,
             id= 'c_copy_subscription_secret_lambda',
             function_name= 'dz_conn_c_copy_subscription_secret',
-            runtime= lambda_.Runtime.PYTHON_3_8,
+            runtime= lambda_.Runtime.PYTHON_3_11,
             code=lambda_.Code.from_asset(path.join('src/consumer/code/lambda', "copy_subscription_secret")),
             handler= "copy_subscription_secret.handler",
             role= common_constructs['a_common_lambda_role'],
             environment= {
                 'G_ACCOUNT_ID': GLOBAL_VARIABLES['governance']['g_account_number'],
-                'G_CROSS_ACCOUNT_ASSUME_ROLE_NAME': GLOBAL_VARIABLES['governance']['g_cross_account_assume_role'],
+                'G_CROSS_ACCOUNT_ASSUME_ROLE_NAME': GLOBAL_VARIABLES['governance']['g_cross_account_assume_role_name'],
                 'G_C_SECRETS_MAPPING_TABLE_NAME': GLOBAL_VARIABLES['governance']['g_c_secrets_mapping_table_name'],
                 'A_COMMON_KEY_ALIAS': common_constructs['a_common_key_alias'],
-                'ACCOUNT_ID': account_id
+                'ACCOUNT_ID': account_id,
+                'REGION': region
             }
         )
 
@@ -61,20 +64,30 @@ class ConsumerManageSubscriptionGrantWorkflowConstruct(Construct):
             scope= self,
             id= 'c_update_subscription_records_lambda',
             function_name= 'dz_conn_c_update_subscription_records',
-            runtime= lambda_.Runtime.PYTHON_3_8,
+            runtime= lambda_.Runtime.PYTHON_3_11,
             code=lambda_.Code.from_asset(path.join('src/consumer/code/lambda', "update_subscription_records")),
             handler= "update_subscription_records.handler",
             role= common_constructs['a_common_lambda_role'],
             environment= {
                 'G_ACCOUNT_ID': GLOBAL_VARIABLES['governance']['g_account_number'],
-                'G_CROSS_ACCOUNT_ASSUME_ROLE_NAME': GLOBAL_VARIABLES['governance']['g_cross_account_assume_role'],
+                'G_CROSS_ACCOUNT_ASSUME_ROLE_NAME': GLOBAL_VARIABLES['governance']['g_cross_account_assume_role_name'],
                 'G_C_SECRETS_MAPPING_TABLE_NAME': GLOBAL_VARIABLES['governance']['g_c_secrets_mapping_table_name'],
                 'G_C_ASSET_SUBSCRIPTIONS_TABLE_NAME': GLOBAL_VARIABLES['governance']['g_c_asset_subscriptions_table_name'],
-                'ACCOUNT_ID': account_id
+                'ACCOUNT_ID': account_id,
+                'REGION': region
             }
         )
         
         # ---------------- Step Functions ------------------------    
+        c_manage_subscription_grant_state_machine_name = GLOBAL_VARIABLES['consumer']['c_manage_subscription_grant_state_machine_name']
+
+        c_manage_subscription_grant_state_machine_logs = logs.LogGroup(
+            scope= self,
+            id= 'c_manage_subscription_grant_state_machine_logs',
+            log_group_name=f'/aws/step-functions/{c_manage_subscription_grant_state_machine_name}',
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         c_manage_subscription_grant_state_machine = stepfunctions.StateMachine(
             scope= self,
             id= 'c_manage_subscription_grant_state_machine',
@@ -85,5 +98,10 @@ class ConsumerManageSubscriptionGrantWorkflowConstruct(Construct):
                 'c_update_subscription_records_lambda_arn': c_update_subscription_records_lambda.function_arn
             },
             role= common_constructs['a_common_sf_role'],
+            logs= stepfunctions.LogOptions(
+                destination=c_manage_subscription_grant_state_machine_logs,
+                level=stepfunctions.LogLevel.ALL
+            ),
+            tracing_enabled=True
         )
 

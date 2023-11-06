@@ -3,9 +3,11 @@ from config.common.global_vars import GLOBAL_VARIABLES
 from aws_cdk import (
     Environment,
     Fn,
+    RemovalPolicy,
     aws_lambda as lambda_,
     aws_stepfunctions as stepfunctions,
     aws_ec2 as ec2,
+    aws_logs as logs
 )
 
 from os import path;
@@ -68,7 +70,7 @@ class ProducerManageSubscriptionGrantWorkflowConstruct(Construct):
             scope= self,
             id= 'p_get_connection_details_lambda',
             function_name= 'dz_conn_p_get_connection_details',
-            runtime= lambda_.Runtime.PYTHON_3_8,
+            runtime= lambda_.Runtime.PYTHON_3_11,
             code=lambda_.Code.from_asset(path.join('src/producer/code/lambda', "get_connection_details")),
             handler= "get_connection_details.handler",
             role= common_constructs['a_common_lambda_role'],
@@ -95,10 +97,11 @@ class ProducerManageSubscriptionGrantWorkflowConstruct(Construct):
             security_groups= p_lambda_security_groups,
             environment= {
                 'G_ACCOUNT_ID': GLOBAL_VARIABLES['governance']['g_account_number'],
-                'G_CROSS_ACCOUNT_ASSUME_ROLE_NAME': GLOBAL_VARIABLES['governance']['g_cross_account_assume_role'],
+                'G_CROSS_ACCOUNT_ASSUME_ROLE_NAME': GLOBAL_VARIABLES['governance']['g_cross_account_assume_role_name'],
                 'G_P_SOURCE_SUBSCRIPTIONS_TABLE_NAME': GLOBAL_VARIABLES['governance']['g_p_source_subscriptions_table_name'],
                 'A_COMMON_KEY_ALIAS': common_constructs['a_common_key_alias'],
                 'ACCOUNT_ID': account_id,
+                'REGION': region
             }
         )
 
@@ -106,7 +109,7 @@ class ProducerManageSubscriptionGrantWorkflowConstruct(Construct):
             scope= self,
             id= 'p_share_subscription_secret_lambda',
             function_name= 'dz_conn_p_share_subscription_secret',
-            runtime= lambda_.Runtime.PYTHON_3_8,
+            runtime= lambda_.Runtime.PYTHON_3_11,
             code=lambda_.Code.from_asset(path.join('src/producer/code/lambda', "share_subscription_secret")),
             handler= "share_subscription_secret.handler",
             role= common_constructs['a_common_lambda_role'],
@@ -116,17 +119,31 @@ class ProducerManageSubscriptionGrantWorkflowConstruct(Construct):
             }
         )
         
-        # ---------------- Step Functions ------------------------        
+        # ---------------- Step Functions ------------------------    
+        p_manage_subscription_grant_state_machine_name = GLOBAL_VARIABLES['producer']['p_manage_subscription_grant_state_machine_name']
+
+        p_manage_subscription_grant_state_machine_logs = logs.LogGroup(
+            scope= self,
+            id= 'p_manage_subscription_grant_state_machine_logs',
+            log_group_name=f'/aws/step-functions/{p_manage_subscription_grant_state_machine_name}',
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         p_manage_subscription_grant_state_machine = stepfunctions.StateMachine(
             scope= self,
             id= 'p_manage_subscription_grant_state_machine',
-            state_machine_name= GLOBAL_VARIABLES['producer']['p_manage_subscription_grant_state_machine_name'],
+            state_machine_name= p_manage_subscription_grant_state_machine_name,
             definition_body=stepfunctions.DefinitionBody.from_file('src/producer/code/stepfunctions/producer_manage_subscription_grant_workflow.asl.json'),
             definition_substitutions= {
                 'p_get_connection_details_lambda_arn': p_get_connection_details_lambda.function_arn,
                 'p_grant_jdbc_subscription_lambda_arn': p_grant_jdbc_subscription_lambda.function_arn,
                 'p_share_subscription_secret_lambda_arn': p_share_subscription_secret_lambda.function_arn
             },
-            role= common_constructs['a_common_sf_role']
+            role= common_constructs['a_common_sf_role'],
+            logs= stepfunctions.LogOptions(
+                destination=p_manage_subscription_grant_state_machine_logs,
+                level=stepfunctions.LogLevel.ALL
+            ),
+            tracing_enabled=True
         )
 

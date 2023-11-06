@@ -1,7 +1,33 @@
 {
     "Comment": "State machine to orchestrate activities to manage dataset subscription revocations on consumer side",
-    "StartAt": "Delete / keep subscription secret?",
+    "StartAt": "Remove subscription records",
     "States": {
+        "Remove subscription records": {
+            "Type": "Task",
+            "Next": "Delete / keep subscription secret?",
+            "Parameters": {
+                "FunctionName": "${c_remove_subscription_records_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.RemoveSubscriptionRecordsDetails",
+            "ResultSelector": {
+                "DataZoneConsumerEnvironmentId.$": "$.Payload.datazone_consumer_environment_id",
+                "DataZoneConsumerProjectId.$": "$.Payload.datazone_consumer_project_id",
+                "DataZoneDomainId.$": "$.Payload.datazone_domain_id",
+                "DataZoneAssetId.$": "$.Payload.datazone_asset_id",
+                "DataZoneAssetRevision.$": "$.Payload.datazone_asset_revision",
+                "DataZoneAssetType.$": "$.Payload.datazone_asset_type",
+                "DataZoneListingId.$": "$.Payload.datazone_listing_id",
+                "DataZoneListingRevision.$": "$.Payload.datazone_listing_revision",
+                "DataZoneListingName.$": "$.Payload.datazone_listing_name",
+                "SecretArn.$": "$.Payload.secret_arn",
+                "SecretName.$": "$.Payload.secret_name",
+                "OwnerAccount.$": "$.Payload.owner_account",
+                "OwnerRegion.$": "$.Payload.owner_region",
+                "LastUpdated.$": "$.Payload.last_updated"
+            }
+        },
         "Delete / keep subscription secret?": {
             "Type": "Choice",
             "Default": "Keep subscription secret",
@@ -9,13 +35,25 @@
                 {
                     "Next": "Delete subscription secret",
                     "StringEquals": "true",
-                    "Variable": "$.DeleteKeepSubscriptionSecretDetails.SecretDeleted"
+                    "Variable": "$.ProducerRevokeDetails.SecretDeleted"
                 }
             ]
         },
+        "Keep subscription secret": {
+            "Type": "Pass",
+            "End": true,
+            "Parameters": {
+                "SecretArn.$": "$.RemoveSubscriptionRecordsDetails.SecretArn",
+                "SecretName.$": "$.RemoveSubscriptionRecordsDetails.SecretName",
+                "SecretDeleted": "false",
+                "SecretDeletionDate": "None",
+                "SecretRecoveryWindowInDays": "None"
+            },
+            "ResultPath": "$.DeleteSubscriptionSecretDetails"
+        },
         "Delete subscription secret": {
             "Type": "Task",
-            "Next": "Remove subscription records",
+            "End": true,
             "Parameters": {
                 "FunctionName": "${c_delete_subscription_secret_lambda_arn}",
                 "Payload.$": "$"
@@ -24,26 +62,10 @@
             "ResultPath": "$.DeleteSubscriptionSecretDetails",
             "ResultSelector": {
                 "SecretArn.$": "$.Payload.secret_arn",
-                "SecretName.$": "$.Payload.secret_name"
-            }
-        },
-        "Keep subscription secret": {
-            "Type": "Pass",
-            "Next": "Remove subscription records",
-            "ResultPath": null
-        },
-        "Remove subscription records": {
-            "Type": "Task",
-            "End": true,
-            "Parameters": {
-                "FunctionName": "${c_remove_subscription_records_lambda_arn}",
-                "Payload.$": "$"
-            },
-            "Resource": "arn:aws:states:::lambda:invoke",
-            "ResultPath": "$.RemoveSubscriptionRecordsDetails",
-            "ResultSelector": {
-                "DataZoneConsumerProjectId.$": "$.Payload.datazone_consumer_project_id",
-                "DataZoneAssetName.$": "$.Payload.datazone_asset_name"
+                "SecretName.$": "$.Payload.secret_name",
+                "SecretDeleted.$": "$.Payload.secret_deleted",
+                "SecretDeletionDate.$": "$.Payload.secret_deletion_date",
+                "SecretRecoveryWindowInDays.$": "$.Payload.secret_recovery_window_in_days"
             }
         }
     }

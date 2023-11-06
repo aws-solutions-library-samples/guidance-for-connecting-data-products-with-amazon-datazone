@@ -1,0 +1,88 @@
+{
+    "Comment": "State machine to orchestrate activities to manage environment active event in environment's account",
+    "StartAt": "Get Environment Details",
+    "States": {
+        "Get Environment Details": {
+            "Type": "Task",
+            "Next": "Which environment profile?",
+            "Parameters": {
+                "FunctionName": "${g_get_environment_details_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.EnvironmentDetails",
+            "ResultSelector": {
+                "AccountId.$": "$.Payload.AccountId",
+                "Region.$": "$.Payload.Region",
+                "DomainId.$": "$.Payload.DomainId",
+                "ProjectId.$": "$.Payload.ProjectId",
+                "EnvironmentId.$": "$.Payload.EnvironmentId",
+                "EnvironmentName.$": "$.Payload.EnvironmentName",
+                "EnvironmentStatus.$": "$.Payload.EnvironmentStatus",
+                "EnvironmentBlueprintId.$": "$.Payload.EnvironmentBlueprintId",
+                "EnvironmentBlueprintName.$": "$.Payload.EnvironmentBlueprintName",
+                "EnvironmentResources.$": "$.Payload.EnvironmentResources"
+            }
+        },
+        "Which environment profile?": {
+            "Type": "Choice",
+            "Default": "Unsupported environment profile",
+            "Choices": [
+                {
+                    "Next": "Get cross-account resource ARNs",
+                    "StringEquals": "DefaultDataLake",
+                    "Variable": "$.EnvironmentDetails.EnvironmentBlueprintName"
+                }
+            ]
+        },
+        "Unsupported environment profile": {
+            "Type": "Pass",
+            "End": true,
+            "ResultPath": null
+        },
+        "Get cross-account resource ARNs": {
+            "Type": "Pass",
+            "Next": "Update Environment Roles",
+            "Parameters": {
+                "UpdateEnvironmentRolesLambdaArn.$": "States.Format('arn:aws:lambda:{}:{}:function:${a_update_environment_roles_lambda_name}', $.EnvironmentDetails.Region, $.EnvironmentDetails.AccountId)",
+                "AddLFTagEnvironmentDBsLambdaArn.$": "States.Format('arn:aws:lambda:{}:{}:function:${p_add_lf_tag_environment_dbs_lambda_name}', $.EnvironmentDetails.Region, $.EnvironmentDetails.AccountId)",
+                "AccountAssumeRoleArn.$": "States.Format('arn:aws:iam::{}:role/${a_cross_account_assume_role_name}', $.EnvironmentDetails.AccountId)"
+            },
+            "ResultPath": "$.CrossAccountResources"
+        },
+        "Update Environment Roles": {
+            "Type": "Task",
+            "Next": "Add LF-Tag to Environment DBs",
+            "Parameters": {
+                "FunctionName.$": "$.CrossAccountResources.UpdateEnvironmentRolesLambdaArn",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Credentials": {
+                "RoleArn.$": "$.CrossAccountResources.AccountAssumeRoleArn"
+            },
+            "ResultPath": "$.AccountUpdateEnvironmentRolesDetails",
+            "ResultSelector": {
+                "EnvironmentRoleArn.$": "$.Payload.environment_role_arn"
+            }
+        },
+        "Add LF-Tag to Environment DBs": {
+            "Type": "Task",
+            "End": true,
+            "Parameters": {
+                "FunctionName.$": "$.CrossAccountResources.AddLFTagEnvironmentDBsLambdaArn",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Credentials": {
+                "RoleArn.$": "$.CrossAccountResources.AccountAssumeRoleArn"
+            },
+            "ResultPath": "$.AccountAddLFTagEnvironmentDBsDetails",
+            "ResultSelector": {
+                "EnvironmentDBNames.$": "$.Payload.environment_db_names",
+                "LFTagKey.$": "$.Payload.lakeformation_tag_key",
+                "LFTagValue.$": "$.Payload.lakeformation_tag_value"
+            }
+        }
+    }
+}

@@ -40,8 +40,7 @@ class DataZoneConnectorsProducerCommonStack(Stack):
         account_id, region = account_props['account_id'], account_props['region']
 
         # ---------------- Lambda Layer ------------------------
-        p_aws_sdk_pandas_account_id = GLOBAL_VARIABLES['producer']['p_aws_sdk_pandas_account_id']
-        p_aws_sdk_pandas_layer_arn = f'arn:aws:lambda:{region}:{p_aws_sdk_pandas_account_id}:layer:AWSSDKPandas-Python38:1'
+        p_aws_sdk_pandas_layer_arn = f'arn:aws:lambda:{region}:336392948345:layer:AWSSDKPandas-Python38:1'
         p_aws_sdk_pandas_layer = lambda_.LayerVersion.from_layer_version_arn(
             scope=self, 
             id='p_aws_sdk_pandas_layer',
@@ -51,22 +50,22 @@ class DataZoneConnectorsProducerCommonStack(Stack):
         p_pyodbc_layer = lambda_.LayerVersion(
             scope=self, 
             id='p_pyodbc_layer',
-            layer_version_name=GLOBAL_VARIABLES['producer']['p_pyodbc_layer_name'],
-            code=lambda_.AssetCode('libs/pyodbc-layer.zip'),
+            layer_version_name='dz_conn_p_pyodbc_layer',
+            code=lambda_.AssetCode('libs/python38/pyodbc-layer.zip'),
             compatible_runtimes=[lambda_.Runtime.PYTHON_3_8]
         )
 
         p_oracledb_layer = lambda_.LayerVersion(
             scope=self, 
             id='p_oracledb_layer',
-            layer_version_name=GLOBAL_VARIABLES['producer']['p_oracledb_layer_name'],
-            code=lambda_.AssetCode('libs/oracledb-layer.zip'),
+            layer_version_name='dz_conn_p_oracledb_layer',
+            code=lambda_.AssetCode('libs/python38/oracledb-layer.zip'),
             compatible_runtimes=[lambda_.Runtime.PYTHON_3_8]
         )
 
         # ----------------------- Lake Formation ---------------------------
-        p_lf_tag_key = GLOBAL_VARIABLES['producer']['p_lakeformation_tag_key']
-        p_lf_tag_value = GLOBAL_VARIABLES['producer']['p_lakeformation_tag_value']
+        p_lf_tag_key = 'dz_conn_p_access'
+        p_lf_tag_value = 'True'
         
         p_lf_tag = lakeformation.CfnTag(
             scope= self,
@@ -182,21 +181,15 @@ class DataZoneConnectorsProducerCommonStack(Stack):
                 p_lf_principal_tag_table_permission.node.add_dependency(p_lf_tag)
                 p_lf_principal_tag_table_permissions.append(p_lf_principal_tag_table_permission)
 
-        # ---------------- Lambda ------------------------
-        a_common_lambda_role = iam.Role.from_role_name(
+        # ---------------- Lambda ------------------------        
+        p_add_lf_tag_environment_dbs_lambda = lambda_.Function(
             scope= self,
-            id= 'a_common_lambda_role',
-            role_name= GLOBAL_VARIABLES['account']['a_common_lambda_role_name'],
-        )
-        
-        p_add_lf_tag_project_dbs_lambda = lambda_.Function(
-            scope= self,
-            id= 'p_add_lf_tag_project_dbs_lambda',
-            function_name= GLOBAL_VARIABLES['producer']['p_add_lf_tag_project_dbs_lambda_name'],
-            runtime= lambda_.Runtime.PYTHON_3_8,
-            code=lambda_.Code.from_asset(path.join('src/producer/code/lambda', "add_lf_tag_project_dbs")),
-            handler= "add_lf_tag_project_dbs.handler",
-            role= a_common_lambda_role,
+            id= 'p_add_lf_tag_environment_dbs_lambda',
+            function_name= GLOBAL_VARIABLES['producer']['p_add_lf_tag_environment_dbs_lambda_name'],
+            runtime= lambda_.Runtime.PYTHON_3_11,
+            code=lambda_.Code.from_asset(path.join('src/producer/code/lambda', "add_lf_tag_environment_dbs")),
+            handler= "add_lf_tag_environment_dbs.handler",
+            role= common_constructs['a_common_lambda_role'],
             environment= {
                 'P_LAKEFORMATION_TAG_KEY': p_lf_tag_key,
                 'P_LAKEFORMATION_TAG_VALUE': p_lf_tag_value
@@ -208,7 +201,7 @@ class DataZoneConnectorsProducerCommonStack(Stack):
             'p_aws_sdk_pandas_layer': p_aws_sdk_pandas_layer,
             'p_pyodbc_layer': p_pyodbc_layer,
             'p_oracledb_layer': p_oracledb_layer,
-            'p_add_lf_tag_project_dbs_lambda': p_add_lf_tag_project_dbs_lambda
+            'p_add_lf_tag_environment_dbs_lambda': p_add_lf_tag_environment_dbs_lambda
         }
 
 

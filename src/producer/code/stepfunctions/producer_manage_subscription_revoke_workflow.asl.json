@@ -31,6 +31,10 @@
                 }
             ]
         },
+        "Unsupported connection type": {
+            "Type": "Fail",
+            "Error": "Unsupported connection type"
+        },
         "Revoke JDBC subscription": {
             "Type": "Task",
             "Next": "Delete / keep subscription secret",
@@ -42,7 +46,9 @@
             "ResultPath": "$.RevokeSubscriptionDetails",
             "ResultSelector": {
                 "ConnectionArn.$": "$.Payload.glue_connection_arn",
+                "DatazoneConsumerEnvironmentId.$": "$.Payload.datazone_consumer_environment_id",
                 "DatazoneConsumerProjectId.$": "$.Payload.datazone_consumer_project_id",
+                "DatazoneDomainId.$": "$.Payload.datazone_domain_id",
                 "SecretArn.$": "$.Payload.secret_arn",
                 "SecretName.$": "$.Payload.secret_name",
                 "DataAssets.$": "$.Payload.data_assets",
@@ -67,10 +73,6 @@
                 "SecretDeletionDate.$":  "$.Payload.secret_deletion_date",
                 "SecretRecoveryWindowInDays.$": "$.Payload.secret_recovery_window_in_days"
             }
-        },
-        "Unsupported connection type": {
-            "Type": "Fail",
-            "Error": "Unsupported connection type"
         }
     }
 }

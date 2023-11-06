@@ -32,43 +32,70 @@ def handler(event, context):
     Parameters
     ----------
     event: dict - Input event dict containing:
-        EventDetails: dict - Dict containing details including:
-            authorizedPrincipals: list - List of dicts containing subscription principals details including:
-                id: str - DataZone project id
-            dataAssetName: str - Name of the data asset that consumer is subscribing to
+        SubscriptionDetails: dict - Dict containing subscription details including:
+            ConsumerProjectDetails: dict - Dict containing consumer details including:
+                EnvironmentId: str - Id of the DataZone consumer environment
+            AssetDetails: dict - Dict containing asset details including:
+                Id: str - Id of the data asset that consumer is subscribing to
 
     context: dict - Input context. Not used on function
 
     Returns
     -------
     response: dict - Dict with response details:
+        datazone_consumer_environment_id: str - Id of DataZone environment that subscribed to the asset
         datazone_consumer_project_id: str - Id of DataZone project that subscribed to the asset
-        datazone_asset_name: str - Name of the asset that the consumer project was subscribed to.
+        datazone_domain_id: str - Id of DataZone domain
+        datazone_asset_id: str - Id of the asset that the consumer subscribed to.
+        datazone_asset_revision: str - Revision of the asset that the consumer subscribed to.
+        datazone_asset_type: str - Type of the asset that the consumer subscribed to.
+        datazone_listing_id: str - Id of the listing associated to the asset that the consumer subscribed to.
+        datazone_listing_revision: str - Revision of the listing associated to the asset that the consumer subscribed to.
+        datazone_listing_name: str - Name of the listing associated to the asset that the consumer subscribed to.
+        secret_arn: str - ARN of the secret (local to the consumer account) that can be used to access the subscribed asset
+        secret_name: str - Name of the secret (local to the consumer account) that can be used to access the subscribed asset
+        owner_account: str - Id of the account that owns the item
+        owner_region: str - Region that owns the item
+        last_updated: str - Datetime of last update performed on the item
     """
+    subscription_details = event['SubscriptionDetails']
     
-    event_details = event['EventDetails']
-
-    subscription_consumer_project = event_details['authorizedPrincipals'][0]['id']
-    subscription_asset_name = event_details['dataAssetName']
+    consumer_project_details = subscription_details['ConsumerProjectDetails']
+    consumer_asset_details = subscription_details['AssetDetails']
     
-    delete_asset_subscription_item(subscription_consumer_project, subscription_asset_name)
+    environment_id = consumer_project_details['EnvironmentId']
+    asset_id = consumer_asset_details['Id']
+    
+    asset_subscription_item = get_asset_subscription_item(environment_id, asset_id)
+    delete_asset_subscription_item(environment_id, asset_id)
 
-    response = {
-        'datazone_consumer_project_id': subscription_consumer_project,
-        'datazone_asset_name': subscription_asset_name
-    }
-
-    return response
+    return asset_subscription_item
 
 
-def delete_asset_subscription_item(consumer_project_id, asset_name):
+def get_asset_subscription_item(environment_id, asset_id):
+    """ Complementary function to get item with asset subscription details from respective governance DynamoDB table """
+
+    dynamodb_response = dynamodb.get_item(
+        TableName=G_C_ASSET_SUBSCRIPTIONS_TABLE_NAME,
+        Key={ 
+            'datazone_consumer_environment_id': dynamodb_serializer.serialize(environment_id),
+            'datazone_asset_id': dynamodb_serializer.serialize(asset_id)
+        }
+    )
+
+    asset_subscription_item = {key: dynamodb_deserializer.deserialize(value) for key, value in dynamodb_response['Item'].items()}
+    
+    return asset_subscription_item
+
+
+def delete_asset_subscription_item(environment_id, asset_id):
     """ Complementary function to delete item with asset subscription details in respective governance DynamoDB table"""
 
     dynamodb_response = dynamodb.delete_item(
         TableName=G_C_ASSET_SUBSCRIPTIONS_TABLE_NAME,
         Key={
-            'datazone_consumer_project_id': dynamodb_serializer.serialize(consumer_project_id),
-            'datazone_asset_name': dynamodb_serializer.serialize(asset_name)
+            'datazone_consumer_environment_id': dynamodb_serializer.serialize(environment_id),
+            'datazone_asset_id': dynamodb_serializer.serialize(asset_id)
         }
     )
 

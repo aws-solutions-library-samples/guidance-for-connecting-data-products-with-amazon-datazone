@@ -3,9 +3,11 @@ from config.common.global_vars import GLOBAL_VARIABLES
 from aws_cdk import (
     Environment,
     Fn,
+    RemovalPolicy,
     aws_lambda as lambda_,
     aws_stepfunctions as stepfunctions,
     aws_ec2 as ec2,
+    aws_logs as logs
 )
 
 from os import path;
@@ -87,7 +89,7 @@ class ProducerManageSubscriptionRevokeWorkflowConstruct(Construct):
             security_groups= p_lambda_security_groups,
             environment= {
                 'G_ACCOUNT_ID': GLOBAL_VARIABLES['governance']['g_account_number'],
-                'G_CROSS_ACCOUNT_ASSUME_ROLE_NAME': GLOBAL_VARIABLES['governance']['g_cross_account_assume_role'],
+                'G_CROSS_ACCOUNT_ASSUME_ROLE_NAME': GLOBAL_VARIABLES['governance']['g_cross_account_assume_role_name'],
                 'G_P_SOURCE_SUBSCRIPTIONS_TABLE_NAME': GLOBAL_VARIABLES['governance']['g_p_source_subscriptions_table_name'],
                 'ACCOUNT_ID': account_id
             }
@@ -97,7 +99,7 @@ class ProducerManageSubscriptionRevokeWorkflowConstruct(Construct):
             scope= self,
             id= 'p_delete_keep_subscription_secret_lambda',
             function_name= 'dz_conn_p_delete_keep_subscription_secret',
-            runtime= lambda_.Runtime.PYTHON_3_8,
+            runtime= lambda_.Runtime.PYTHON_3_11,
             code=lambda_.Code.from_asset(path.join('src/producer/code/lambda', "delete_keep_subscription_secret")),
             handler= "delete_keep_subscription_secret.handler",
             environment= {
@@ -106,7 +108,16 @@ class ProducerManageSubscriptionRevokeWorkflowConstruct(Construct):
             role= common_constructs['a_common_lambda_role']
         )
         
-        # ---------------- Step Functions ------------------------        
+        # ---------------- Step Functions ------------------------
+        p_manage_subscription_revoke_state_machine_name = GLOBAL_VARIABLES['producer']['p_manage_subscription_revoke_state_machine_name']
+
+        p_manage_subscription_revoke_state_machine_logs = logs.LogGroup(
+            scope= self,
+            id= 'p_manage_subscription_revoke_state_machine_logs',
+            log_group_name=f'/aws/step-functions/{p_manage_subscription_revoke_state_machine_name}',
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         p_manage_subscription_revoke_state_machine = stepfunctions.StateMachine(
             scope= self,
             id= 'p_manage_subscription_revoke_state_machine',
@@ -117,6 +128,11 @@ class ProducerManageSubscriptionRevokeWorkflowConstruct(Construct):
                 'p_revoke_jdbc_subscription_lambda_arn': p_revoke_jdbc_subscription_lambda.function_arn,
                 'p_delete_keep_subscription_secret_lambda_arn': p_delete_keep_subscription_secret_lambda.function_arn
             },
-            role= common_constructs['a_common_sf_role']
+            role= common_constructs['a_common_sf_role'],
+            logs= stepfunctions.LogOptions(
+                destination=p_manage_subscription_revoke_state_machine_logs,
+                level=stepfunctions.LogLevel.ALL
+            ),
+            tracing_enabled=True
         )
 

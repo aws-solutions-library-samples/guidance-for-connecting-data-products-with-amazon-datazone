@@ -25,6 +25,9 @@ A_COMMON_KEY_ALIAS = os.getenv('A_COMMON_KEY_ALIAS')
 # Constant: Represents the account id
 ACCOUNT_ID = os.getenv('ACCOUNT_ID')
 
+# Constant: Represents the region
+REGION = os.getenv('REGION')
+
 # Constant: Represents the length of the passwords to be generated
 PASSWORD_LENGTH = 17
 
@@ -52,9 +55,10 @@ def handler(event, context):
     Parameters
     ----------
     event: dict - Input event dict containing:
-        EventDetails: dict - Dict containing details including:
-            authorizedPrincipals: list - List of dicts containing subscription principals details including:
-                id: str - DataZone project id
+        SubscriptionDetails: dict - Dict containing details including:
+            DomainId: str - DataZone domain id
+            ConsumerProjectDetails.ProjectId: str - DataZone project id subscribing to the data asset
+            ConsumerProjectDetails.EnvironmentId: str - DataZone environment id subscribing to the data asset
         ConnectionDetails: dict - Dict containing glue connection details including:
             ConnectionArn: str - ARN of the glue connection associated to the subscribed asset.
             ConnectionAssetName: str - Name of the asset on source database mapped to subscribed table in Glue catalog
@@ -68,22 +72,29 @@ def handler(event, context):
     -------
     subscription_item: dict - Dict with source connection subscription item details including:
         glue_connection_arn: str - ARN of the glue connection associated to the subscribed asset
+        datazone_consumer_environment_id: str - Id of DataZone environment that subscribed to the asset
         datazone_consumer_project_id: str - Id of DataZone project that subscribed to the asset
+        datazone_domain_id: str - Id of DataZone domain
         secret_arn: str - ARN of the secret (local to the producer account) that can be used to access the subscribed asset
         secret_name: str - Name of the secret (local to the producer account) that can be used to access the subscribed asset
         data_assets: list - List of data assets on source database that can be accessed through the same subscription secret
         owner_account: str - Id of the account that owns the item
+        owner_region: str - Region that owns the item
         last_updated: str - Datetime of last update performed on the item
         new_subscription_secret: str - 'true' or 'false' depending on if subscription secret was newly created or not. 
     """
 
-    # Get subscription event and glue connection details
-    event_details = event['EventDetails']
+    # Get domain, consumer project and glue connection details
+    subscription_details = event['SubscriptionDetails']
     glue_connection_details = event['ConnectionDetails']
     
-    # Get subscription project and stablish user / password if new
-    subscription_consumer_project = event_details['authorizedPrincipals'][0]['id']
-    subscription_user = subscription_consumer_project.replace('proj-', 'dz')[0:16]
+    domain_id = subscription_details['DomainId']
+    consumer_project_details = subscription_details['ConsumerProjectDetails']
+    
+    # Get consumer environment and stablish user / password if new
+    consumer_project_id = consumer_project_details['ProjectId']
+    consumer_environment_id = consumer_project_details['EnvironmentId']
+    subscription_user = f'dz_{consumer_environment_id}'
     subscription_password = generate_password()
 
     # Get connection elements from glue connection
@@ -105,13 +116,13 @@ def handler(event, context):
     
     # Retrieve if existing subscription record in DynamoDB
     new_subscription_secret= 'false'
-    subscription_item = get_subscription_item(glue_connection_arn, subscription_consumer_project)
+    subscription_item = get_subscription_item(glue_connection_arn, consumer_environment_id)
     
     if not subscription_item:
         
         # Create secret with connection details for project subscription
         subscription_secret_name_suffix = str(uuid.uuid4()).replace('-', '')
-        subscription_secret_name = f'dz-conn-p-{subscription_consumer_project}-{subscription_secret_name_suffix}'
+        subscription_secret_name = f'dz-conn-p-{consumer_project_id}-{consumer_environment_id}-{subscription_secret_name_suffix}'
         subscription_secret_value = {
             'engine': glue_connection_engine,
             'host': glue_connection_host,
@@ -135,20 +146,20 @@ def handler(event, context):
     if glue_connection_asset_name not in subscription_data_assets: subscription_data_assets.append(glue_connection_asset_name)
 
     # Create or update DynamoDB record with subscription details (connection secret and accessible dat assets)
-    subscription_item = update_subscription_item(glue_connection_arn, subscription_consumer_project, subscription_secret_arn, subscription_secret_name, subscription_data_assets)
+    subscription_item = update_subscription_item(glue_connection_arn, consumer_environment_id, consumer_project_id, domain_id, subscription_secret_arn, subscription_secret_name, subscription_data_assets)
     subscription_item['new_subscription_secret'] = new_subscription_secret
 
     return subscription_item
 
 
-def get_subscription_item(glue_connection_arn, datazone_consumer_project_id):
+def get_subscription_item(glue_connection_arn, consumer_environment_id):
     """ Complementary function to get item with source connection subscription details in respective governance DynamoDB table if existent, else None"""
 
     dynamodb_response = dynamodb.get_item(
         TableName= G_P_SOURCE_SUBSCRIPTIONS_TABLE_NAME,
         Key= {
             'glue_connection_arn': dynamodb_serializer.serialize(glue_connection_arn),
-            'datazone_consumer_project_id': dynamodb_serializer.serialize(datazone_consumer_project_id)
+            'datazone_consumer_environment_id': dynamodb_serializer.serialize(consumer_environment_id)
         }
     )
     
@@ -159,16 +170,19 @@ def get_subscription_item(glue_connection_arn, datazone_consumer_project_id):
     return subscription_item
 
 
-def update_subscription_item(glue_connection_arn, datazone_consumer_project_id, secret_arn, secret_name, data_assets):
+def update_subscription_item(glue_connection_arn, consumer_environment_id, consumer_project_id, domain_id, secret_arn, secret_name, data_assets):
     """ Complementary function to update item with source connection subscription details in respective governance DynamoDB table"""
 
     subscription_item = {
         'glue_connection_arn': glue_connection_arn,
-        'datazone_consumer_project_id':  datazone_consumer_project_id,
+        'datazone_consumer_environment_id':  consumer_environment_id,
+        'datazone_consumer_project_id':  consumer_project_id,
+        'datazone_domain_id': domain_id,
         'secret_arn': secret_arn,
         'secret_name': secret_name,
         'data_assets': data_assets,
         'owner_account': ACCOUNT_ID,
+        'owner_region': REGION,
         'last_updated': datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     }
     
@@ -258,14 +272,11 @@ def create_grant_user_asset(engine, connection, user, password, asset_name):
             cursor.execute(create_user_query)
             
             asset_db, asset_schema, asset_table = asset_name.split('.')
-            grant_schema_query = f'GRANT SELECT ON SCHEMA :: {asset_schema} TO {user};'
-            cursor.execute(grant_schema_query)
-            
             grant_asset_query = f'GRANT SELECT ON {asset_schema}.{asset_table} TO {user};'
             cursor.execute(grant_asset_query)
 
         elif engine == 'oracle':            
-            create_user_query = f"DECLARE userexist INTEGER; BEGIN SELECT COUNT(*) into userexist FROM dba_users WHERE username=UPPER('{user}'); IF (userexist = 0) THEN EXECUTE IMMEDIATE 'CREATE USER {user} IDENTIFIED BY {password}'; EXECUTE IMMEDIATE 'GRANT CONNECT, CREATE SESSION TO {user}'; END IF; END;"
+            create_user_query = f"DECLARE userexist INTEGER; BEGIN SELECT COUNT(*) into userexist FROM dba_users WHERE username=UPPER('{user}'); IF (userexist = 0) THEN EXECUTE IMMEDIATE 'CREATE USER {user} IDENTIFIED BY \"{password}\"'; EXECUTE IMMEDIATE 'GRANT CONNECT, CREATE SESSION TO {user}'; END IF; END;"
             print(create_user_query)
             cursor.execute(create_user_query)
             

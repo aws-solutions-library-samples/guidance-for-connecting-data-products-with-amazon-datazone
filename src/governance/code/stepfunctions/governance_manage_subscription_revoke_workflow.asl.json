@@ -1,15 +1,47 @@
 {
     "Comment": "State machine to orchestrate activities to manage dataset subscription revocations on consumer and producer side",
-    "StartAt": "Get producer / consumer cross-account resource ARNs",
+    "StartAt": "Get Subscription Details",
     "States": {
-        "Get producer / consumer cross-account resource ARNs": {
+        "Get Subscription Details": {
+            "Type": "Task",
+            "Next": "Which asset type?",
+            "Parameters": {
+                "FunctionName": "${g_get_subscription_details_lambda_arn}",
+                "Payload.$": "$"
+            },
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "ResultPath": "$.SubscriptionDetails",
+            "ResultSelector": {
+                "DomainId.$": "$.Payload.DomainId",
+                "ProducerProjectDetails.$": "$.Payload.ProducerProjectDetails",
+                "ConsumerProjectDetails.$": "$.Payload.ConsumerProjectDetails",
+                "ListingDetails.$": "$.Payload.ListingDetails",
+                "AssetDetails.$": "$.Payload.AssetDetails"
+            }
+        },
+        "Which asset type?": {
+            "Type": "Choice",
+            "Default": "Unsupported asset type",
+            "Choices": [
+                {
+                    "Next": "Get cross-account resource ARNs",
+                    "StringEquals": "GlueTableAssetType",
+                    "Variable": "$.SubscriptionDetails.AssetDetails.Type"
+                }
+            ]
+        },
+        "Unsupported asset type": {
+            "Type": "Fail",
+            "Error": "Unsupported asset type"
+        },
+        "Get cross-account resource ARNs": {
             "Type": "Pass",
             "Next": "Manage Subscription Revoke - Producer",
             "Parameters": {
-                "ProducerStateMachineArn.$": "States.Format('arn:aws:states:${region}:{}:stateMachine:${p_manage_subscription_revoke_state_machine_name}', $.EventDetails.sourceAccountId)",
-                "ProducerAssumeRoleArn.$": "States.Format('arn:aws:iam::{}:role/${a_cross_account_assume_role_name}', $.EventDetails.sourceAccountId)",
-                "ConsumerStateMachineArn.$": "States.Format('arn:aws:states:${region}:{}:stateMachine:${c_manage_subscription_revoke_state_machine_name}', States.ArrayGetItem(States.StringSplit($.EventDetails.projectRoles[0], ':'), 3))",
-                "ConsumerAssumeRoleArn.$": "States.Format('{}/${a_cross_account_assume_role_name}', States.ArrayGetItem(States.StringSplit($.EventDetails.projectRoles[0], '/'), 0))"
+                "ProducerStateMachineArn.$": "States.Format('arn:aws:states:{}:{}:stateMachine:${p_manage_subscription_revoke_state_machine_name}', $.SubscriptionDetails.AssetDetails.GlueTableDetails.Region, $.SubscriptionDetails.AssetDetails.GlueTableDetails.AccountId)",
+                "ProducerAssumeRoleArn.$": "States.Format('arn:aws:iam::{}:role/${a_cross_account_assume_role_name}', $.SubscriptionDetails.AssetDetails.GlueTableDetails.AccountId)",
+                "ConsumerStateMachineArn.$": "States.Format('arn:aws:states:{}:{}:stateMachine:${c_manage_subscription_revoke_state_machine_name}', $.SubscriptionDetails.ConsumerProjectDetails.Region, $.SubscriptionDetails.ConsumerProjectDetails.AccountId)",
+                "ConsumerAssumeRoleArn.$": "States.Format('arn:aws:iam::{}:role/${a_cross_account_assume_role_name}', $.SubscriptionDetails.ConsumerProjectDetails.AccountId)"
             },
             "ResultPath": "$.CrossAccountResources"
         },
@@ -18,7 +50,7 @@
             "Next": "Manage Subscription Revoke - Consumer",
             "Parameters": {
                 "Input": {
-                    "EventDetails.$": "$.EventDetails"
+                    "SubscriptionDetails.$": "$.SubscriptionDetails"
                 },
                 "StateMachineArn.$": "$.CrossAccountResources.ProducerStateMachineArn"
             },
@@ -26,10 +58,10 @@
             "Credentials": {
                 "RoleArn.$": "$.CrossAccountResources.ProducerAssumeRoleArn"
             },
-            "ResultPath": "$.ProducerManageSubscriptionRevokeDetails",
+            "ResultPath": "$.ProducerRevokeDetails",
             "ResultSelector": {
-                "SecretArn.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretArn",
-                "SecretName.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretName",
+                "SecretArn.$": "$.Output.RevokeSubscriptionDetails.SecretArn",
+                "SecretName.$": "$.Output.RevokeSubscriptionDetails.SecretName",
                 "SecretDeleted.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretDeleted",
                 "SecretDeletionDate.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretDeletionDate",
                 "SecretRecoveryWindowInDays.$": "$.Output.DeleteKeepSubscriptionSecretDetails.SecretRecoveryWindowInDays"
@@ -40,8 +72,8 @@
             "End": true,
             "Parameters": {
                 "Input": {
-                    "EventDetails.$": "$.EventDetails",
-                    "DeleteKeepSubscriptionSecretDetails.$": "$.ProducerManageSubscriptionRevokeDetails"
+                    "SubscriptionDetails.$": "$.SubscriptionDetails",
+                    "ProducerRevokeDetails.$": "$.ProducerRevokeDetails"
                 },
                 "StateMachineArn.$": "$.CrossAccountResources.ConsumerStateMachineArn"
             },
@@ -49,10 +81,15 @@
             "Credentials": {
                 "RoleArn.$": "$.CrossAccountResources.ConsumerAssumeRoleArn"
             },
-            "ResultPath": "$.ConsumerManageSubscriptionRevokeDetails",
+            "ResultPath": "$.ConsumerRevokeDetails",
             "ResultSelector": {
-                "DataZoneConsumerProjectId.$": "$.Output.RemoveSubscriptionRecordsDetails.DataZoneConsumerProjectId",
-                "DataZoneAssetName.$": "$.Output.RemoveSubscriptionRecordsDetails.DataZoneAssetName"
+                "DataZoneConsumerEnvironmentId.$": "$.Output.RemoveSubscriptionRecordsDetails.DataZoneConsumerEnvironmentId",
+                "DataZoneAssetId.$": "$.Output.RemoveSubscriptionRecordsDetails.DataZoneAssetId",
+                "SecretArn.$": "$.Output.DeleteSubscriptionSecretDetails.SecretArn",
+                "SecretName.$": "$.Output.DeleteSubscriptionSecretDetails.SecretName",
+                "SecretDeleted.$": "$.Output.DeleteSubscriptionSecretDetails.SecretDeleted",
+                "SecretDeletionDate.$": "$.Output.DeleteSubscriptionSecretDetails.SecretDeletionDate",
+                "SecretRecoveryWindowInDays.$": "$.Output.DeleteSubscriptionSecretDetails.SecretRecoveryWindowInDays"
             }
         }
     }

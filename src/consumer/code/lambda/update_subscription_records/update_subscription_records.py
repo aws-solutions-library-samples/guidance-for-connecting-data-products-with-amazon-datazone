@@ -19,6 +19,9 @@ G_C_ASSET_SUBSCRIPTIONS_TABLE_NAME = os.getenv('G_C_ASSET_SUBSCRIPTIONS_TABLE_NA
 # Constant: Represents the account id
 ACCOUNT_ID = os.getenv('ACCOUNT_ID')
 
+# Constant: Represents the region
+REGION = os.getenv('REGION')
+
 g_cross_account_role_arn = f'arn:aws:iam::{G_ACCOUNT_ID}:role/{G_CROSS_ACCOUNT_ASSUME_ROLE_NAME}'
 
 sts = boto3.client('sts')
@@ -38,9 +41,20 @@ def handler(event, context):
     Parameters
     ----------
     event: dict - Input event dict containing:
-        EventDetails: dict - Dict containing details including:
-            dataAssetName: str - Name of the data asset that consumer is subscribing to
-        ShareSubscriptionSecretDetails: dict - Dict containing share subscription details including:
+        SubscriptionDetails: dict - Dict containing subscription details including:
+            DomainId: str - DataZone domain id
+            ConsumerProjectDetails: dict - Dict containing consumer details including:
+                ProjectId: str - DataZone consumer project id
+                EnvironmentId: str - DataZone consumer environment id
+            AssetDetails: dict - Dict containing asset details including:
+                Id: str - Id of the data asset that consumer is subscribing to
+                Revision: str - Revision of the data asset that consumer is subscribing to
+                Type: str - Type of the data asset that consumer is subscribing to
+            ListingDetails: dict - Dict containing listing details including:
+                Id: str - Id of the listing associated to the data asset that consumer is subscribing to
+                Revision: str - Revision of the listing associated to the data asset that consumer is subscribing to
+                Name: str - Name of the listing associated to the data asset that consumer is subscribing to
+        ProducerGrantDetails: dict - Dict containing producer grant details including:
             SecretArn: str - Arn of producer shared subscription secret.
 
     context: dict - Input context. Not used on function
@@ -48,37 +62,57 @@ def handler(event, context):
     Returns
     -------
     asset_subscription_item: dict - Dict with asset subscription item details:
+        datazone_consumer_environment_id: str - Id of DataZone environment that subscribed to the asset
         datazone_consumer_project_id: str - Id of DataZone project that subscribed to the asset
-        datazone_asset_name: str - Name of the asset that the consumer project subscribed to.
-        secret_name: str - Name of the secret (local to the consumer account) that can be used to access the subscribed asset
+        datazone_domain_id: str - Id of DataZone domain
+        datazone_asset_id: str - Id of the asset that the consumer subscribed to.
+        datazone_asset_revision: str - Revision of the asset that the consumer subscribed to.
+        datazone_asset_type: str - Type of the asset that the consumer subscribed to.
+        datazone_listing_id: str - Id of the listing associated to the asset that the consumer subscribed to.
+        datazone_listing_revision: str - Revision of the listing associated to the asset that the consumer subscribed to.
+        datazone_listing_name: str - Name of the listing associated to the asset that the consumer subscribed to.
         secret_arn: str - ARN of the secret (local to the consumer account) that can be used to access the subscribed asset
+        secret_name: str - Name of the secret (local to the consumer account) that can be used to access the subscribed asset
         owner_account: str - Id of the account that owns the item
+        owner_region: str - Region that owns the item
         last_updated: str - Datetime of last update performed on the item
     """
+    subscription_details = event['SubscriptionDetails']
+    producer_grant_details = event['ProducerGrantDetails']
 
-    event_details = event['EventDetails']
-    share_subscription_secret_details = event['ShareSubscriptionSecretDetails']
+    domain_id = subscription_details['DomainId']
+    consumer_project_details = subscription_details['ConsumerProjectDetails']
+    asset_details = subscription_details['AssetDetails']
+    listing_details = subscription_details['ListingDetails']
 
-    shared_subscription_secret_arn = share_subscription_secret_details['SecretArn']
-    secret_association_item = get_secret_association_item(shared_subscription_secret_arn)
-    subscription_consumer_project = secret_association_item['datazone_consumer_project_id']
-    subscription_secret_name = secret_association_item['secret_name']
-    subscription_secret_arn = secret_association_item['secret_arn']
+    consumer_environment_id = consumer_project_details['EnvironmentId']
+    consumer_project_id = consumer_project_details['ProjectId']
+    asset_id = asset_details['Id']
+    asset_revision = asset_details['Revision']
+    asset_type = asset_details['Type']
+    listing_id = listing_details['Id']
+    listing_revision = listing_details['Revision']
+    listing_name = listing_details['Name']
 
-    subscription_asset_name = event_details['dataAssetName']
-    asset_subscription_item = update_asset_subscription_item(subscription_consumer_project, subscription_asset_name, subscription_secret_name, subscription_secret_arn)
+    shared_secret_arn = producer_grant_details['SecretArn']
+    secret_association_item = get_secret_association_item(shared_secret_arn)
+    secret_arn = secret_association_item['secret_arn']
+    secret_name = secret_association_item['secret_name']
+
+    asset_subscription_item = update_asset_subscription_item(
+        consumer_environment_id, consumer_project_id, domain_id, asset_id, asset_revision, asset_type,
+        listing_id, listing_revision, listing_name, secret_arn, secret_name
+    )
 
     return asset_subscription_item
 
 
-def get_secret_association_item(producer_secret_arn):
+def get_secret_association_item(shared_secret_arn):
     """ Complementary function to get item with secret mapping details in respective governance DynamoDB table"""
 
     dynamodb_response = dynamodb.get_item(
         TableName= G_C_SECRETS_MAPPING_TABLE_NAME,
-        Key= {
-            'datazone_producer_shared_secret_arn': dynamodb_serializer.serialize(producer_secret_arn)
-        }
+        Key= { 'shared_secret_arn': dynamodb_serializer.serialize(shared_secret_arn) }
     )
     
     secret_association_item = None
@@ -88,16 +122,25 @@ def get_secret_association_item(producer_secret_arn):
     return secret_association_item
 
 
-def update_asset_subscription_item(consumer_project_id, asset_name, secret_name, secret_arn):
+def update_asset_subscription_item(environment_id, project_id, domain_id, asset_id, asset_revision, asset_type, listing_id, listing_revision, listing_name, secret_arn, secret_name):
     """ Complementary function to update item with asset subscription details in respective governance DynamoDB table"""
 
     asset_subscription_item = {
-        'datazone_consumer_project_id': consumer_project_id,
-        'datazone_asset_name':  asset_name,
-        'secret_name': secret_name,
+        'datazone_consumer_environment_id': environment_id,
+        'datazone_consumer_project_id': project_id,
+        'datazone_domain_id': domain_id,
+        'datazone_asset_id':  asset_id,
+        'datazone_asset_revision':  asset_revision,
+        'datazone_asset_type':  asset_type,
+        'datazone_listing_id':  listing_id,
+        'datazone_listing_revision':  listing_revision,
+        'datazone_listing_name':  listing_name,
         'secret_arn': secret_arn,
+        'secret_name': secret_name,
         'owner_account': ACCOUNT_ID,
+        'owner_region': REGION,
         'last_updated': datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
     }
     
     dynamodb_response = dynamodb.put_item(

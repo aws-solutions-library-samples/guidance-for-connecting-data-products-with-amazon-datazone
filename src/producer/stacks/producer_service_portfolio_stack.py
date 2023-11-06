@@ -168,10 +168,22 @@ class GlueJDBCConnectorBaseProduct(servicecatalog.ProductStack):
         super().__init__(scope, id, **kwargs)
 
         # ------------- Parameters --------------------
+        p_datazone_domain_id_param = CfnParameter(
+            scope= self,
+            id= 'DataZoneDomainId',
+            description= 'Id of the Amazon DataZone domain where project belongs' 
+        )
+
         p_datazone_project_id_param = CfnParameter(
             scope= self,
             id= 'DataZoneProjectId',
             description= 'Id of the Amazon DataZone project from which connector will be accessed' 
+        )
+
+        p_datazone_environment_id_param = CfnParameter(
+            scope= self,
+            id= 'DataZoneEnvironmentId',
+            description= 'Id of the Amazon DataZone environment from which connector will be accessed' 
         )
         
         p_connection_name_param = CfnParameter(
@@ -183,7 +195,7 @@ class GlueJDBCConnectorBaseProduct(servicecatalog.ProductStack):
         p_engine_param = CfnParameter(
             scope= self,
             id= 'ConnectionSourceEngine',
-            description= 'Id of the Amazon DataZone project from which connector will be accessed' 
+            description= 'Id of the Amazon DataZone environment from which connector will be accessed' 
         )
 
         p_host_param = CfnParameter(
@@ -240,7 +252,9 @@ class GlueJDBCConnectorBaseProduct(servicecatalog.ProductStack):
 
         # -------------- Consolidated Parameters -------------------
         self.p_connection_props = {
+            'datazone_domain_id': p_datazone_domain_id_param.value_as_string,
             'datazone_project_id': p_datazone_project_id_param.value_as_string,
+            'datazone_environment_id': p_datazone_environment_id_param.value_as_string,
             'glue_connection': {
                 'name': p_connection_name_param.value_as_string,
                 'engine': p_engine_param.value_as_string,
