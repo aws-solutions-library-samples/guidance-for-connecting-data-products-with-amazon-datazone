@@ -112,7 +112,7 @@ The baseline stack is an AWS CloudFormation (cfn) stack that extends the capabil
 
 In order to deploy the baseline stack in each of your governed accounts:
 
-- First you need to make a copy of the the *dz_conn_b_<ACCOUNT_ID>_params.json* file in the *base_environment/params folder*. Note that for each copy of the file, you need to replace the *<ACCOUNT_ID>* tag in the file name with the account id value that maps to the corresponding governed account.
+- First you need to make a copy of the the *dz_conn_b_<ACCOUNT_ID>_params.json* file in the *base/params folder*. Note that for each copy of the file, you need to replace the *<ACCOUNT_ID>* tag in the file name with the account id value that maps to the corresponding governed account.
 - Include the CDK AWS CloudFormation execution role name of each governed account as value of the parameter *CdkCloudFormationExecutionRoleName* in the governed account's corresponding file as shown in the following example.
 
 ``` json
