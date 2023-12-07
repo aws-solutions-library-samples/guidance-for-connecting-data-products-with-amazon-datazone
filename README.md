@@ -1,10 +1,27 @@
 # Guidance for Connecting Data Products with Amazon DataZone
 
-## What problem does this solution solve?
+## Table of Content
+
+### Required
+
+1. [Overview](#overview)
+    - [Cost](#cost)
+2. [Prerequisites](#prerequisites)
+3. [Deployment Steps](#deployment-steps)
+4. [Deployment Validation](#deployment-validation)
+5. [Next Steps](#next-steps-required)
+6. [Cleanup](#cleanup-required)
+7. [Additional considerations](#additional-considerations)
+8. [Notices](#notices)
+9. [Authors](#authors)
+
+## Overview
+
+### What problem does this solution solve?
 
 AWS customers are actively building their data governance strategy on top of [Amazon DataZone](https://aws.amazon.com/datazone/), realizing how they can achieve effective governance of their Amazon S3-based Data Lakes and Amazon Redshift clusters. Extending their governance reach to other JDBC data sources like Amazon RDS, self-managed databases or third-party solutions is a common ask once AWS customers experience the benefits of Amazon DataZone. At the end of the day, AWS customers are seeking a unified solution to govern all of their data assets.
 
-## How does this solution solve the problem?
+### How does this solution solve the problem?
 
 The purpose of this solution is to help customers extend governance with Amazon DataZone and be able to cover common JDBC data sources, so that teams can share and collaborate around data assets hosted in data repositories like Amazon Aurora, MySQL, PostgreSQL, Oracle or SQL Server databases, either on top of RDS or self-managed. 
 
@@ -12,7 +29,7 @@ This solution is built on top of the [AWS Cloud Development Kit (CDK)](https://a
 
 Although it currently supports MySQL, PostgreSQL, SQL Server and Oracle engine integration, it can be extended to support other SQL and NoSQL databases as well as data warehouse solutions.
 
-## What AWS Services does this solution use?
+### What AWS Services does this solution use?
 
 - [Amazon DataZone](https://aws.amazon.com/datazone/)
 - [Amazon EventBridge](https://aws.amazon.com/eventbridge/)
@@ -26,7 +43,7 @@ Although it currently supports MySQL, PostgreSQL, SQL Server and Oracle engine i
 - [Amazon DynamoDB](https://aws.amazon.com/dynamodb/)
 - [AWS Lake Formation](https://aws.amazon.com/lake-formation/)
 
-## How does this solution work?
+### How does this solution work?
 
 In order to better understand the inner-workings of this solution, lets first list all of the actions that needs to happen before users can collaborate around a data asset hosted in a JDBC source, in a self-service manner, using Amazon DataZone service:
 
@@ -56,17 +73,59 @@ Note that activities 3 and 5 don't need any complementary task to be executed (a
 
 The following diagram is the solution's reference architecture illustrating the workflow 2.2 for when a subscription request is approved, described above (which you can consider as the core functionality of this solution). It also illustrates how tools in the solution's toolkit are leveraged by producers and consumers before and after workflow execution.
 
-![Solution's reference architecture](assets/images/reference-architecture.png)
+![Solution's reference architecture](assets/images/reference-architecture.png) 
 
-## How to deploy this solution?
+### Cost
 
-This solution uses [AWS Cloud Development Kit (CDK)](https://aws.amazon.com/cdk/) CLI to automate its deployment. It contains two applications; the first application is intended to be deployed in the central governance account (where Amazon DataZone domain is configured) and second application is intended to be deployed in each of the governed accounts (where data sources are hosted and where producer / consumer project environments will be allocated). 
+The following table provides a sample cost breakdown for deploying this solution with the default parameters in the US East (N. Virginia) region for one month.
 
-Each application will be parametrized and deployed separately so that it includes account specific resources like networking and security related.
+The estimate presented bellow assumes the following usage-pattern:
 
-Note that, you can follow this guide whether you want to deploy the solution in a multi-account environment or a single-account environment. For the latter, just remember that both, governed and governance accounts, should point to the same single account.
+- Number of governed accounts: 10
+- Number of secrets (subscriptions to JDBC sources): 100
+- Number of project environment related workflow (creation / deletion) executions in a month:  20
+- Number of subscription related workflow (grant / revoke) executions in a month: 200
+- Number of AWS Glue crawlers executions in a month: 1500
+- Average execution time of AWS Glue crawlers in minutes: 2 
+- Number of Amazon Athena queries on top of JDBC sources in a month: 20.000
+- Average execution time of an Amazon Athena query in seconds: 7
+- Average data volume (in MBs) scanned by Amazon Athena per query: 10
 
-### Create virtual environment and install requirements
+However, each customer has its own specific usage-pattern driven by number of users, teams, and data assets that they will be collaborating on. 
+
+The cost estimate will be divided in two sections. Section 1 illustrates costs for this solution itself and resources supporting its core capabilities. Section 2 illustrates costs for user activity related to producing and consuming data assets. These costs needs to be assessed individually.
+
+#### Section 1
+
+The majority of the monthly cost is dependent on AWS Secrets Manager and AWS Key Management Service. Note that these services costs are low in comparison to the big impact they have on solution’s security posture. 
+
+| AWS Service    | Dimensions | Cost (USD) |
+| -------- | ------- | ------- |
+| AWS Step Functions | 220 workflow requests per month with 5 average transitions per request | $0.00 |
+| AWS Lambda | 1100 requests per month with average duration of 200 ms and 128 MB memory | $0.00 |
+| Amazon DynamoDB | 3 GB of total storage and 600 writes per month of on demand capacity | $0.76 |
+| AWS Key Management Service | 10 CMKs serving 400 symmetric requests per month | $10.00 |
+| AWS Secrets Manager | 100 secrets serving 21000 API calls per month | $40.10 |
+| Amazon EventBridge | 220 custom events per month | $0.00 |
+
+#### Section 2
+
+The majority of the monthly cost is dependent on AWS Glue Crawlers. Note that these services are associated to tasks that users need to perform to operate on top of Amazon DataZone and that are not a requirement for the solution. Customers have the option to deploy this resources via the toolkit provided in this solution or by any other means they have available.
+
+| AWS Service    | Dimensions | Cost (USD) |
+| -------- | ------- | ------- |
+| AWS Glue | 1500 crawler executions with 2 minutes average execution time | $26.40 |
+| Amazon Athena | 20000 queries per month scanning 10 MB of dta in average per query | $0.95 |
+| AWS Lambda | 20000 requests per month with average duration of 7000 ms and 128 MB memory | $0.76 |
+
+
+## Prerequisites
+
+### Supported Regions
+
+Please check for supported regions for Amazon DataZone in the following [link](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/). This guidance has been tested in *us-east-1* region.
+
+### Third-party tools
 
 It is assumed that you have python3 installed already with package *venv* available. To create a virtual environment on MacOS and Linux, execute the following command while standing in the root directory:
 
@@ -88,11 +147,9 @@ pip install -r requirements.txt
 
 Check that all requirements were successfully installed. Now you can move to the next step.
 
-### Deploy prerequisites in governance and governed accounts
+### aws cdk bootstrap
 
-In order to deploy this solution's resources in each of the governed accounts; meaning accounts where Amazon DataZone project environments will be hosted, it is necessary to execute the following steps in each one of them:
-
-#### Bootstrap governance and governed accounts
+This solution uses [AWS Cloud Development Kit (CDK)](https://aws.amazon.com/cdk/) CLI to automate its deployment. It contains two applications; the first application is intended to be deployed in the central governance account (where Amazon DataZone domain is configured) and second application is intended to be deployed in each of the governed accounts (where data sources are hosted and where producer / consumer project environments will be allocated).
 
 In order to bootstrap both, the governance and all the governed accounts you need to have an AWS CLI profile for the governance and for each governed account already in place. For more details please review the [AWS documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html).
 
@@ -106,7 +163,13 @@ As part of the bootstrapping process, CDK will create a set of Amazon IAM roles 
 
 For your governed accounts bootstrap deployments only, take note of the name of the new CDK AWS CloudFormation execution role that was created. The role name should follow the structure *cdk-<RANDOM_VALUE>-cfn-exec-role-<ACCOUNT_ID>-<AWS_REGION>*. There is no need to take note of the role for your governance account.
 
-#### Deploy solution's baseline stack in governed accounts
+## Deployment Steps
+
+As stated above, this solutions contains two applications; the first intended to be deployed in the central governance account and the second in each of the governed accounts. Each application will be parametrized and deployed separately so that it includes account specific resources like networking and security related.
+
+Note that, you can follow this guide whether you want to deploy the solution in a multi-account environment or a single-account environment. For the latter, just remember that both, governed and governance accounts, should point to the same single account.
+
+### 1. Deploy solution's baseline stack in governed accounts
 
 The baseline stack is an AWS CloudFormation (cfn) stack that extends the capabilities of the CDK AWS CloudFormation execution role so that it is able to perform administrative tasks in AWS Lake Formation.
 
@@ -133,11 +196,9 @@ sh base/deploy.sh -p <PROFILE_NAME> -a <ACCOUNT_ID>
 Remember that this process must be done for all governed accounts. Once finished, you can move to the next step.
 Note that this step is not necessary to be performed in your governance account.
 
-### Deploy solution's resources in governance account
+### 2. Deploy solution's resources in governance account
 
-this solution is a solution that includes two CDK applications. 1/ An application containing all resources for the single central account that will govern your Amazon DataZone setup and 2/ an application containing all resources to be deployed in each of your governed accounts. First, you need to deploy resources in your central governance account as described next.
-
-#### Setup config file for your central governance account
+#### 2.1. Setup config file for your central governance account
 
 The json file located in the *config/governance/g_config.py* path contains the configuration parameters to setup your governance account deployment.
 
@@ -151,7 +212,7 @@ GOVERNANCE_PROPS = {
 }
 ```
 
-#### Deploy governance CDK app in governance account
+#### 2.2 Deploy governance CDK app in governance account
 
 Execute the following command to deploy governance CDK app, replacing <PROFILE_NAME> with the AWS CLI profile name mapping to your governance account:
 
@@ -167,11 +228,11 @@ You will be able to see the progress of the deployment in your terminal and [AWS
 
 Now you can move to the next step.
 
-### Deploy solution's resources in all governed accounts
+### 3. Deploy solution's resources in all governed accounts
 
-Now, you need to deploy resources in each of your governed accounts. In order to do so you need to repeat the steps described next for each of the governed accounts in you Amazon DataZone setup.
+Repeat the steps described next for each of the governed accounts in you Amazon DataZone setup.
 
-#### Setup config file for a governed account
+#### 3.1 Setup config file for a governed account
 
 First, you need to make a copy of the the *a_<ACCOUNT_ID>_config.json* file in the *config/account* replacing the *<ACCOUNT_ID>* tag in the file name with the account id value that maps to the corresponding governed account.
 
@@ -181,7 +242,7 @@ Note that *ACCOUNT_PROPS* is a core dictionary that is mapped by other dictionar
 
 You need to review and assign each of the values in all dictionaries before you proceed to the next step. All keys in all dictionaries must have non-null values for deployment to be successful (unless specified in the file's documentation).
 
-#### Deploy governed CDK app in a governed account
+#### 3.2 Deploy governed CDK app in a governed account
 
 Execute the following command to deploy account (governed) CDK app, replacing ```<PROFILE_NAME>``` and ```<ACCOUNT_ID>``` with the AWS CLI profile name and account id mapping to your governed account:
 
@@ -197,7 +258,19 @@ You will be able to see the progress of the deployment in your terminal and [AWS
 
 Remember that you need to repeat steps 3a and 3b for each of your governed accounts. When finished, you will be done with the deployment of the solution.
 
-## How to uninstall this solution?
+## Deployment Validation
+
+In your governance account:
+* Open [AWS CloudFormation console](https://console.aws.amazon.com/cloudformation/home?) and verify the status of the templates with the names *dz-conn-g-workflows-stack* and *dz-conn-g-common-stack*.
+
+In each of your governed accounts:
+* Open [AWS CloudFormation console](https://console.aws.amazon.com/cloudformation/home?) and verify the status of the templates with the names *dz-conn-a-common-stack*, *dz-conn-p-common-stack*, *dz-conn-p-workflows-stack*, *dz-conn-p-service-portfolio-stack*, *dz-conn-c-workflows-stack* and *dz-conn-c-service-portfolio-stack*.
+
+## Next Steps
+
+Note that this solution is designed to be tested on customer's database setup. We encourage as a next step to try it on a testing environment, by leveraging your own database (Oracle, SQL Server, MySQL or PostgreSQL).
+
+## Cleanup
 
 ### Before uninstalling this solution
 
@@ -224,7 +297,7 @@ Note that before uninstalling this solution it is recommended to:
     }
     ```
 
-### Uninstalling the application in each of the governed accounts
+### 1. Uninstalling the application in each of the governed accounts
 
 The following steps should be repeated per each governed account in your setup:
 
@@ -237,14 +310,14 @@ The following steps should be repeated per each governed account in your setup:
     * *dz-conn-p-common-stack*
     * *dz-conn-a-common-stack*
 
-### Uninstalling the application in the governance account
+### 2. Uninstalling the application in the governance account
 
 * Sign in to the [AWS CloudFormation console](https://console.aws.amazon.com/cloudformation/home?).
 * On the Stacks page, go through the following stacks in the suggested order and choose Delete for each one of them. It is recommended to wait for deletion of each stack before moving to the next. 
     * *dz-conn-g-workflows-stack*
     * *dz-conn-g-common-stack*
 
-### Uninstalling solution’s prerequisites
+### 3. Uninstalling solution’s prerequisites
 
 The following steps should be repeated per each governed account in your setup:
 
@@ -252,67 +325,15 @@ The following steps should be repeated per each governed account in your setup:
 * On the Stacks page, select the  *dz-conn-base-env* stack.
 * Choose Delete.
 
-## What costs can I expect when using this solution?
+## Additional considerations
 
-The following table provides a sample cost breakdown for deploying this solution with the default parameters in the US East (N. Virginia) region for one month.
+For any feedback, questions, or suggestions, please use the issues tab under this repo.
 
-The estimate presented bellow assumes the following usage-pattern:
+## Notices
 
-- Number of governed accounts: 10
-- Number of secrets (subscriptions to JDBC sources): 100
-- Number of project environment related workflow (creation / deletion) executions in a month:  20
-- Number of subscription related workflow (grant / revoke) executions in a month: 200
-- Number of AWS Glue crawlers executions in a month: 1500
-- Average execution time of AWS Glue crawlers in minutes: 2 
-- Number of Amazon Athena queries on top of JDBC sources in a month: 20.000
-- Average execution time of an Amazon Athena query in seconds: 7
-- Average data volume (in MBs) scanned by Amazon Athena per query: 10
+Customers are responsible for making their own independent assessment of the information in this Guidance. This Guidance: (a) is for informational purposes only, (b) represents AWS current product offerings and practices, which are subject to change without notice, and (c) does not create any commitments or assurances from AWS and its affiliates, suppliers or licensors. AWS products or services are provided “as is” without warranties, representations, or conditions of any kind, whether express or implied. AWS responsibilities and liabilities to its customers are controlled by AWS agreements, and this Guidance is not part of, nor does it modify, any agreement between AWS and its customers.
 
-However, each customer has its own specific usage-pattern driven by number of users, teams, and data assets that they will be collaborating on. 
 
-The cost estimate will be divided in two sections. Section 1 illustrates costs for this solution itself and resources supporting its core capabilities. Section 2 illustrates costs for user activity related to producing and consuming data assets. These costs needs to be assessed individually.
+## Authors
 
-### Section 1
-
-The majority of the monthly cost is dependent on AWS Secrets Manager and AWS Key Management Service. Note that these services costs are low in comparison to the big impact they have on solution’s security posture. 
-
-| AWS Service    | Dimensions | Cost (USD) |
-| -------- | ------- | ------- |
-| AWS Step Functions | 220 workflow requests per month with 5 average transitions per request | $0.00 |
-| AWS Lambda | 1100 requests per month with average duration of 200 ms and 128 MB memory | $0.00 |
-| Amazon DynamoDB | 3 GB of total storage and 600 writes per month of on demand capacity | $0.76 |
-| AWS Key Management Service | 10 CMKs serving 400 symmetric requests per month | $10.00 |
-| AWS Secrets Manager | 100 secrets serving 21000 API calls per month | $40.10 |
-| Amazon EventBridge | 220 custom events per month | $0.00 |
-
-### Section 2
-
-The majority of the monthly cost is dependent on AWS Glue Crawlers. Note that these services are associated to tasks that users need to perform to operate on top of Amazon DataZone and that are not a requirement for the solution. Customers have the option to deploy this resources via the toolkit provided in this solution or by any other means they have available.
-
-| AWS Service    | Dimensions | Cost (USD) |
-| -------- | ------- | ------- |
-| AWS Glue | 1500 crawler executions with 2 minutes average execution time | $26.40 |
-| Amazon Athena | 20000 queries per month scanning 10 MB of dta in average per query | $0.95 |
-| AWS Lambda | 20000 requests per month with average duration of 7000 ms and 128 MB memory | $0.76 |
-
-## What is the security posture of the this solution?
-
-When you build systems on AWS infrastructure, security responsibilities are shared between you and AWS. This [shared responsibility model](http://aws.amazon.com/compliance/shared-responsibility-model/) reduces your operational burden because AWS operates, manages, and controls the components including the host operating system, the virtualization layer, and the physical security of the facilities in which the services operate. For more information about [AWS security](http://aws.amazon.com/security/), visit AWS Cloud Security.
-
-### Amazon IAM roles
-
-Amazon IAM roles allow customers to assign granular access policies and permissions to services and users on the AWS Cloud. This solution creates Amazon IAM roles that grant the solution’s resources perform actions on other regional resources. Additionally it uses resource policy to restrict access to shared resources between accounts.
-
-Cross-account access is done via cross-account roles with limited permissions that allow only intended actions. This pattern is used both ways, accessing governed accounts from governance central account and otherwise.
-
-### AWS KMS keys
-
-The this solution will deploy AWS KMS customer managed keys (one per account) to encrypt secrets used to share credentials. We recommend referring to [Security best practices for AWS Key Management Service](https://docs.aws.amazon.com/kms/latest/developerguide/best-practices.html) to enhance the protection of your encryption keys.
-
-### AWS Secrets Manager
-
-Secrets are the core means by which the this solution enables data sharing and collaboration between producers and consumers on top of JDBC hosted data assets. Access to secrets are protected by resource policies and contents are encrypted by account specific CMKs in AWS KMS. Secrets are deleted when not needed by the solution.
-
-## License
-
-This library is licensed under the MIT-0 License. See the LICENSE file.
+Jose Romero
