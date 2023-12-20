@@ -256,7 +256,7 @@ Approve Amazon IAM resource deployment as required by the CDK deployment process
 
 You will be able to see the progress of the deployment in your terminal and [AWS CloudFormation console](https://console.aws.amazon.com/cloudformation/home?) of your governed account. When finished check that deployment was successful.
 
-Remember that you need to repeat steps 3a and 3b for each of your governed accounts. When finished, you will be done with the deployment of the solution.
+Remember that you need to repeat the last two steps for each of your governed accounts. When finished, you will be done with the deployment of the solution.
 
 ## Deployment Validation
 
