@@ -22,7 +22,8 @@ dz_conn_g_common_stack = DataZoneConnectorsGovernanceCommonStack(
     scope= app,
     construct_id = "dz-conn-g-common-stack",
     governance_props = GOVERNANCE_PROPS,
-    env = env
+    env = env,
+    description= "Guidance for Connecting Data Products with Amazon DataZone - Governance Common Stack - (SO9317)"
 )
 
 governance_common_constructs = {
@@ -36,7 +37,8 @@ dz_conn_g_workflows_stack = GovernanceWorkflowsStack(
     governance_props = GOVERNANCE_PROPS,
     workflows_props = GOVERNANCE_WORKFLOW_PROPS,
     common_constructs = governance_common_constructs,
-    env = env
+    env = env,
+    description= "Guidance for Connecting Data Products with Amazon DataZone - Governance Workflows Stack - (SO9317)"
 )
 
 app.synth()

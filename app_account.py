@@ -40,7 +40,8 @@ dz_conn_a_common_stack = DataZoneConnectorsAccountCommonStack(
     scope= app,
     construct_id = "dz-conn-a-common-stack",
     account_props = ACCOUNT_PROPS,
-    env = env
+    env = env,
+    description= "Guidance for Connecting Data Products with Amazon DataZone - Account Common Stack - (SO9317)"
 )
 
 account_common_constructs = {
@@ -55,7 +56,8 @@ dz_conn_p_common_stack = DataZoneConnectorsProducerCommonStack(
     account_props = ACCOUNT_PROPS,
     producer_props = PRODUCER_PROPS,
     common_constructs = account_common_constructs,
-    env = env
+    env = env,
+    description= "Guidance for Connecting Data Products with Amazon DataZone - Producer Common Stack - (SO9317)"
 )
 
 dz_conn_p_common_stack.node.add_dependency(dz_conn_a_common_stack)
@@ -71,7 +73,8 @@ dz_conn_p_workflows_stack = ProducerWorkflowsStack(
     account_props = ACCOUNT_PROPS,
     workflows_props = PRODUCER_WORKFLOW_PROPS,
     common_constructs = account_common_constructs,
-    env = env
+    env = env,
+    description= "Guidance for Connecting Data Products with Amazon DataZone - Producer Workflows Stack - (SO9317)"
 )
 
 dz_conn_p_service_portfolio_stack =  ProducerServicePortfolioStack(
@@ -80,7 +83,8 @@ dz_conn_p_service_portfolio_stack =  ProducerServicePortfolioStack(
     account_props = ACCOUNT_PROPS,
     portfolio_props = PRODUCER_SERVICE_PORTFOLIO_PROPS,
     common_constructs = account_common_constructs,
-    env = env
+    env = env,
+    description= "Guidance for Connecting Data Products with Amazon DataZone - Producer Portfolio Stack - (SO9317)"
 )
 
 # ---------------- Consumer Stacks ------------------------
@@ -90,7 +94,8 @@ dz_conn_c_workflows_stack = ConsumerWorkflowsStack(
     account_props = ACCOUNT_PROPS,
     workflows_props = CONSUMER_WORKFLOW_PROPS,
     common_constructs = account_common_constructs,
-    env = env
+    env = env,
+    description= "Guidance for Connecting Data Products with Amazon DataZone - Consumer Workflows Stack - (SO9317)"
 )
 
 dz_conn_c_service_portfolio_stack =  ConsumerServicePortfolioStack(
@@ -99,7 +104,8 @@ dz_conn_c_service_portfolio_stack =  ConsumerServicePortfolioStack(
     account_props = ACCOUNT_PROPS,
     portfolio_props = CONSUMER_SERVICE_PORTFOLIO_PROPS,
     common_constructs = account_common_constructs,
-    env = env
+    env = env,
+    description= "Guidance for Connecting Data Products with Amazon DataZone - Consumer Portfolio Stack - (SO9317)"
 )
 
 app.synth()
