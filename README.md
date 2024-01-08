@@ -52,7 +52,7 @@ In order to better understand the inner-workings of this solution, lets first li
 3. The producer needs to run the Amazon DataZone environment's data source that publishes the data asset into the Amazon DataZone common business catalog.
 4. A consumer needs to create a project with an environment (based on data lake profile) that will be used to subscribe and consume the published data asset.
 5. A consumer needs to submit a subscription request (with its justification) to get and access grant to the published data asset. This is done from within the consumer's Amazon DataZone project in the Amazon DataZone portal.
-6. A producer needs to accept the subscription request in the Amazon DataZone portal, so that access to the data asset is granted to the consumer. Consumer project environments (based on data lake profile) will be added as targets of the subscription automatically or manually by the consumer in the Amazon DataZone portal.
+6. A producer needs to accept the subscription request in the Amazon DataZone portal, so that access to the data asset is granted to the consumer.
 7. A consumer needs to put in place a mechanism that allows for the consumption of the published data asset.
 
 With this high level process in mind, this solution will provide a set of mechanisms that will simplify or automate the activities described above, including:
@@ -65,8 +65,8 @@ With this high level process in mind, this solution will provide a set of mechan
 2. A set of automated workflows that will trigger on certain Amazon DataZone events like:
     
     1.  When a new Amazon DataZone environment is successfully deployed so that default environment capabilities are extended to support this solution's complimentary toolkit, described above. (Activities 1 and 4)
-    2.  When a subscription request to a published data asset is accepted so that actual access is granted automatically to the corresponding consumer environment. (Activity 6)
-    3. When a subscription to a published data asset is revoked / canceled so that actual access is revoked automatically from the corresponding environment.
+    2.  When a subscription request to a published data asset is accepted so that actual access is granted automatically to the corresponding consumer environments. (Activity 6)
+    3. When a subscription to a published data asset is revoked / canceled so that actual access is revoked automatically from the corresponding environments.
     4. When an existing Amazon DataZone environment deletion starts, so that non-default Amazon DataZone capabilities are removed from environment.
 
 Note that activities 3 and 5 don't need any complementary task to be executed (automatically nor manually).
@@ -278,7 +278,8 @@ Note that before uninstalling this solution it is recommended to:
 1.  Revoke access to all assets hosted by JDBC sources that were granted via this solution, because created secrets in AWS Secrets manager during grant workflow will not be deleted when deleting the solution, nor created users associated to consumer environments in each of your source dbs will be removed. 
     * It is recommended to do this via the Amazon DataZone portal.
     * You can verify that all subscription related assets were removed by checking Amazon DynamoDB items, remaining secrets in AWS Secrets Manager and remaining users in your source dbs.
-2. Execute the *dz_conn_g_manage_environment_delete* state machine in your governance account for each of the environments created after this solutions installation, because environment roles need to be left as were originally deployed by Amazon DataZone (cleaned); meaning, without the capability / permission extensions that this solution added when environments were created.
+2. Delete all provisioned products from this solution's toolkit (both producer and consumer related). This can be done by either using the DataZone environment roles used to provision them in the first place or using the administrative role(s) specified when provisioning the solution.
+3. Execute the *dz_conn_g_manage_environment_delete* state machine in your governance account for each of the environments created after this solutions installation, because environment roles need to be left as were originally deployed by Amazon DataZone (cleaned); meaning, without the capability / permission extensions that this solution added when environments were created.
     * If not done, it can bring unexpected errors later when trying to delete environments using the Amazon DataZone portal.
     * To execute the workflow, start a new execution of the *dz_conn_g_manage_environment_delete* state machine in the [AWS Step Functions](https://us-east-1.console.aws.amazon.com/states) console of your governance account using the following input and replacing ```<AMAZON_DATAZONE_DOMAIN_ID>```, ```<AMAZON_DATAZONE_PROJECT_ID>``` and ```<AMAZON_DATAZONE_ENVIRONMENT_ID>``` with the corresponding values for the environment that you are going to clean:
 
@@ -296,6 +297,8 @@ Note that before uninstalling this solution it is recommended to:
         }
     }
     ```
+
+    Notice that this step is not necessary if you are deleting the DataZone environments before uninstalling the solution as the *dz_conn_g_manage_environment_delete* will be triggered automatically.
 
 ### 1. Uninstalling the application in each of the governed accounts
 

@@ -143,8 +143,12 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
             managed_policy_name= 'g_common_lambda_policy',
             statements= [
                 iam.PolicyStatement(
-                    actions=['datazone:GetEnvironment', 'datazone:GetEnvironmentBlueprint', 'datazone:GetListing', 'datazone:GetProject', 'datazone:GetEnvironment', 'datazone:GetEnvironmentProfile'],
+                    actions=['datazone:GetEnvironment', 'datazone:GetEnvironmentBlueprint', 'datazone:GetListing', 'datazone:GetProject', 'datazone:GetEnvironment', 'datazone:GetEnvironmentProfile', 'datazone:ListEnvironments'],
                     resources=[f'arn:aws:datazone:{region}:{account_id}:domain/*']
+                ),
+                iam.PolicyStatement(
+                    actions=['states:StartExecution'],
+                    resources=[f'arn:aws:states:{region}:{account_id}:stateMachine:dz_conn_g_*']
                 ),
                 iam.PolicyStatement(
                     actions=['logs:CreateLogGroup'],
@@ -217,6 +221,10 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
                 iam.PolicyStatement(
                     actions=['states:StartExecution'],
                     resources=[f'arn:aws:states:{region}:{account_id}:stateMachine:dz_conn_g_*']
+                ),
+                iam.PolicyStatement(
+                    actions=['lambda:InvokeFunction'],
+                    resources=[f'arn:aws:lambda:{region}:{account_id}:function:dz_conn_g_*']
                 )
             ]
         )
@@ -259,6 +267,26 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
             role= g_common_lambda_role
         )
 
+        g_manage_subscription_grant_state_machine_name = GLOBAL_VARIABLES['governance']['g_manage_subscription_grant_state_machine_name']
+        g_manage_subscription_revoke_state_machine_name = GLOBAL_VARIABLES['governance']['g_manage_subscription_revoke_state_machine_name']
+        
+        g_start_subscription_workflow_lambda = lambda_.Function(
+            scope= self,
+            id= 'g_start_subscription_workflow_lambda',
+            function_name= 'dz_conn_g_start_subscription_workflow',
+            runtime= lambda_.Runtime.PYTHON_3_11,
+            code=lambda_.Code.from_asset(path.join('src/governance/code/lambda', "start_subscription_workflow")),
+            handler= "start_subscription_workflow.handler",
+            layers= [
+                g_boto3_layer
+            ],
+            role= g_common_lambda_role,
+            environment= {
+                'G_SUBSCRIPTION_GRANT_WORKFLOW_ARN': f'arn:aws:states:{region}:{account_id}:stateMachine:{g_manage_subscription_grant_state_machine_name}',
+                'G_SUBSCRIPTION_REVOKE_WORKFLOW_ARN': f'arn:aws:states:{region}:{account_id}:stateMachine:{g_manage_subscription_revoke_state_machine_name}'
+            }
+        )
+
         # -------------- Outputs --------------------
         self.outputs = {
             'g_p_source_subscriptions_table': g_p_source_subscriptions_table,
@@ -268,5 +296,6 @@ class DataZoneConnectorsGovernanceCommonStack(Stack):
             'g_common_sf_role': g_common_sf_role,
             'g_common_eventbridge_role_name': g_common_eventbridge_role.role_name,
             'g_get_environment_details_lambda': g_get_environment_details_lambda,
-            'g_get_subscription_details_lambda': g_get_subscription_details_lambda
+            'g_get_subscription_details_lambda': g_get_subscription_details_lambda,
+            'g_start_subscription_workflow_lambda': g_start_subscription_workflow_lambda
         }

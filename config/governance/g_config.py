@@ -29,7 +29,7 @@ GOVERNANCE_WORKFLOW_PROPS = {
     'g_manage_environment_active': {        
         'g_eventbridge_rule_enabled': True
     },
-    'g_manage_environment_delete': {        
+    'g_manage_project_delete': {        
         'g_eventbridge_rule_enabled': True
     },
     'g_manage_subscription_grant': {        

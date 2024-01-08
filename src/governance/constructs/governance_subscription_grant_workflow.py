@@ -45,7 +45,7 @@ class GovernanceManageSubscriptionGrantWorkflowConstruct(Construct):
         account_id, region = governance_props['account_id'], governance_props['region']
         
         # ---------------- Step Functions ------------------------    
-        g_manage_subscription_grant_state_machine_name = 'dz_conn_g_manage_subscription_grant'
+        g_manage_subscription_grant_state_machine_name = GLOBAL_VARIABLES['governance']['g_manage_subscription_grant_state_machine_name']
         
         g_manage_subscription_grant_state_machine_logs = logs.LogGroup(
             scope= self,
@@ -74,12 +74,6 @@ class GovernanceManageSubscriptionGrantWorkflowConstruct(Construct):
         )
 
         # --------------- EventBridge ---------------------------
-        g_common_eventbridge_role = iam.Role.from_role_name(
-            scope= self, 
-            id= 'g_common_eventbridge_role_name',
-            role_name= common_constructs['g_common_eventbridge_role_name']
-        )
-        
         g_manage_subscription_grant_rule = events.Rule(
             scope= self,
             id= 'g_manage_subscription_grant_rule',
@@ -87,14 +81,13 @@ class GovernanceManageSubscriptionGrantWorkflowConstruct(Construct):
             enabled=workflow_props['g_eventbridge_rule_enabled'],
             event_pattern=events.EventPattern(
                 source=['aws.datazone'],
-                detail_type=['Subscription Grant Completed']
+                detail_type=['Subscription Created']
             )
         )
 
-        g_manage_subscription_grant_rule_target = event_targets.SfnStateMachine(
-            machine= g_manage_subscription_grant_state_machine,
-            role=g_common_eventbridge_role,
-            input=events.RuleTargetInput.from_object(
+        g_manage_subscription_grant_rule_target = event_targets.LambdaFunction(
+            handler= common_constructs['g_start_subscription_workflow_lambda'],
+            event=events.RuleTargetInput.from_object(
                 { 'EventDetails': events.EventField.from_path('$.detail') }
             )
         )

@@ -84,8 +84,7 @@ class GovernanceManageEnvironmentDeleteWorkflowConstruct(Construct):
             enabled=workflow_props['g_eventbridge_rule_enabled'],
             event_pattern=events.EventPattern(
                 source=['aws.datazone'],
-                # detail_type=['Environment Deletion Started']
-                detail_type=['Environment Deployment Started']
+                detail_type=['Environment Deletion Started']
             )
         )
 

@@ -24,6 +24,9 @@ This dict is intended to BE LEFT UNMODIFIED. The dict structure includes:
         g_p_source_subscriptions_table_name: str - Name of the DynamoDB table in governance account that will store metadata for producer source connection subscriptions details
         g_c_asset_subscriptions_table_name: str - Name of the DynamoDB table in governance account that will store metadata for consumer asset subscriptions details
         g_c_secrets_mapping_table_name: str - Name of the DynamoDB table in governance account that will store metadata for consumer secrets mapping details
+
+        g_manage_subscription_grant_state_machine_name: str - Name to be used in governance account state machine that will orchestrate the complete subscription grant
+        g_manage_subscription_revoke_state_machine_name: str - Name to be used in governance account state machine that will orchestrate the complete subscription revoke
 """
 GLOBAL_VARIABLES = {
     'account': {
@@ -51,6 +54,9 @@ GLOBAL_VARIABLES = {
         'g_cross_account_assume_role_name': 'dz_conn_g_cross_account_assume_role',
         'g_p_source_subscriptions_table_name': 'dz_conn_g_p_source_subscriptions',
         'g_c_asset_subscriptions_table_name': 'dz_conn_g_c_asset_subscriptions',
-        'g_c_secrets_mapping_table_name': 'dz_conn_g_c_secrets_mapping'
+        'g_c_secrets_mapping_table_name': 'dz_conn_g_c_secrets_mapping',
+
+        'g_manage_subscription_grant_state_machine_name': 'dz_conn_g_manage_subscription_grant',
+        'g_manage_subscription_revoke_state_machine_name': 'dz_conn_g_manage_subscription_revoke'
     }
 }
