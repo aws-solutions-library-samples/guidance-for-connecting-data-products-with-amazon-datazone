@@ -163,9 +163,7 @@ class AthenaJDBCConnectorConstruct(Construct):
 class AthenaMySqlJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
     """ Class to represent an MySQL athena connection based on an underlying lambda function / application and an athena data catalog."""
     
-    AthenaMySQLServerlessApplicationArns = {
-        'us-east-1': 'arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaMySQLConnector'
-    }
+    AthenaMySQLServerlessApplicationArn = 'arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaMySQLConnector'
     
     def __init__(self, scope: Construct, construct_id: str, account_props: dict, connection_props: dict, env: Environment, **kwargs) -> None:
         """ Class Constructor. Will assign variables specific to MySQL, then will call super class constructor.
@@ -173,7 +171,7 @@ class AthenaMySqlJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
         """
 
         region = account_props['region']
-        self.athena_connector_application_arn = self.AthenaMySQLServerlessApplicationArns[region]
+        self.athena_connector_application_arn = self.AthenaMySQLServerlessApplicationArn
 
         host = connection_props['host']
         port = connection_props['port']
@@ -188,9 +186,7 @@ class AthenaMySqlJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
 class AthenaPostgresqlJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
     """ Class to represent an PostgreSQL athena connection based on an underlying lambda function / application and an athena data catalog."""
 
-    AthenaPostgresServerlessApplicationArns = {
-        'us-east-1': 'arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaPostgreSQLConnector'
-    }
+    AthenaPostgresServerlessApplicationArn = 'arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaPostgreSQLConnector'
     
     def __init__(self, scope: Construct, construct_id: str, account_props: dict, connection_props: dict, env: Environment, **kwargs) -> None:
         """ Class Constructor. Will assign variables specific to PostgreSQL, then will call super class constructor.
@@ -198,7 +194,7 @@ class AthenaPostgresqlJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
         """
 
         region = account_props['region']
-        self.athena_connector_application_arn = self.AthenaPostgresServerlessApplicationArns[region]
+        self.athena_connector_application_arn = self.AthenaPostgresServerlessApplicationArn
 
         host = connection_props['host']
         port = connection_props['port']
@@ -213,9 +209,7 @@ class AthenaPostgresqlJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
 class AthenaSqlServerJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
     """ Class to represent an SQL Server athena connection based on an underlying lambda function / application and an athena data catalog."""
 
-    AthenaSqlServerServerlessApplicationArns = {
-        'us-east-1': 'arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaSqlServerConnector'
-    }
+    AthenaSqlServerServerlessApplicationArn = 'arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaSqlServerConnector'
     
     def __init__(self, scope: Construct, construct_id: str, account_props: dict, connection_props: dict, env: Environment, **kwargs) -> None:
         """ Class Constructor. Will assign variables specific to SQL Server, then will call super class constructor.
@@ -223,7 +217,7 @@ class AthenaSqlServerJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
         """
 
         region = account_props['region']
-        self.athena_connector_application_arn = self.AthenaSqlServerServerlessApplicationArns[region]
+        self.athena_connector_application_arn = self.AthenaSqlServerServerlessApplicationArn
 
         host = connection_props['host']
         port = connection_props['port']
@@ -240,9 +234,7 @@ class AthenaSqlServerJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
 class AthenaOracleJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
     """ Class to represent an Oracle athena connection based on an underlying lambda function / application and an athena data catalog."""
 
-    AthenaSqlServerServerlessApplicationArns = {
-        'us-east-1': 'arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaOracleConnector'
-    }
+    AthenaSqlServerServerlessApplicationArn = 'arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaOracleConnector'
     
     def __init__(self, scope: Construct, construct_id: str, account_props: dict, connection_props: dict, env: Environment, **kwargs) -> None:
         """ Class Constructor. Will assign variables specific to Oracle, then will call super class constructor.
@@ -250,7 +242,7 @@ class AthenaOracleJDBCConnectorConstruct(AthenaJDBCConnectorConstruct):
         """
 
         region = account_props['region']
-        self.athena_connector_application_arn = self.AthenaSqlServerServerlessApplicationArns[region]
+        self.athena_connector_application_arn = self.AthenaSqlServerServerlessApplicationArn
 
         host = connection_props['host']
         port = connection_props['port']

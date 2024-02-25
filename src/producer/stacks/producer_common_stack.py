@@ -13,6 +13,39 @@ from aws_cdk import (
 
 from constructs import Construct
 
+AWSSDKPANDAS_LAYER_ARNS = {
+    'af-south-1': 'arn:aws:lambda:af-south-1:336392948345:layer:AWSSDKPandas-Python38:16',
+    'ap-northeast-1': 'arn:aws:lambda:ap-northeast-1:336392948345:layer:AWSSDKPandas-Python38:16',
+    'ap-northeast-2': 'arn:aws:lambda:ap-northeast-2:336392948345:layer:AWSSDKPandas-Python38:18',
+    'ap-northeast-3': 'arn:aws:lambda:ap-northeast-3:336392948345:layer:AWSSDKPandas-Python38:18',
+    'ap-south-1': 'arn:aws:lambda:ap-south-1:336392948345:layer:AWSSDKPandas-Python38:16',
+    'ap-southeast-1': 'arn:aws:lambda:ap-southeast-1:336392948345:layer:AWSSDKPandas-Python38:16',
+    'ap-southeast-2': 'arn:aws:lambda:ap-southeast-2:336392948345:layer:AWSSDKPandas-Python38:16',
+    'ca-central-1': 'arn:aws:lambda:ca-central-1:336392948345:layer:AWSSDKPandas-Python38:18',
+    'eu-central-1': 'arn:aws:lambda:eu-central-1:336392948345:layer:AWSSDKPandas-Python38:16',
+    'eu-north-1': 'arn:aws:lambda:eu-north-1:336392948345:layer:AWSSDKPandas-Python38:18',
+    'eu-west-1': 'arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python38:16',
+    'eu-west-2': 'arn:aws:lambda:eu-west-2:336392948345:layer:AWSSDKPandas-Python38:16',
+    'eu-west-3': 'arn:aws:lambda:eu-west-3:336392948345:layer:AWSSDKPandas-Python38:18',
+    'sa-east-1': 'arn:aws:lambda:sa-east-1:336392948345:layer:AWSSDKPandas-Python38:18',
+    'us-east-1': 'arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python38:16',
+    'us-east-2': 'arn:aws:lambda:us-east-2:336392948345:layer:AWSSDKPandas-Python38:16',
+    'us-west-1': 'arn:aws:lambda:us-west-1:336392948345:layer:AWSSDKPandas-Python38:19',
+    'us-west-2': 'arn:aws:lambda:us-west-2:336392948345:layer:AWSSDKPandas-Python38:17',
+    'ap-east-1': 'arn:aws:lambda:ap-east-1:839552336658:layer:AWSSDKPandas-Python38:11',
+    'ap-south-2': 'arn:aws:lambda:ap-south-2:246107603503:layer:AWSSDKPandas-Python38:14',
+    'ap-southeast-3': 'arn:aws:lambda:ap-southeast-3:258944054355:layer:AWSSDKPandas-Python38:11',
+    'ap-southeast-4': 'arn:aws:lambda:ap-southeast-4:945386623051:layer:AWSSDKPandas-Python38:10',
+    'eu-central-2': 'arn:aws:lambda:eu-central-2:956415814219:layer:AWSSDKPandas-Python38:10',
+    'eu-south-1': 'arn:aws:lambda:eu-south-1:774444163449:layer:AWSSDKPandas-Python38:11',
+    'eu-south-2': 'arn:aws:lambda:eu-south-2:982086096842:layer:AWSSDKPandas-Python38:10',
+    'il-central-1': 'arn:aws:lambda:il-central-1:263840725265:layer:AWSSDKPandas-Python38:8',
+    'me-central-1': 'arn:aws:lambda:me-central-1:593833071574:layer:AWSSDKPandas-Python38:10',
+    'me-south-1': 'arn:aws:lambda:me-south-1:938046470361:layer:AWSSDKPandas-Python38:11',
+    'cn-north-1': 'arn:aws-cn:lambda:cn-north-1:406640652441:layer:AWSSDKPandas-Python38:9',
+    'cn-northwest-1': 'arn:aws-cn:lambda:cn-northwest-1:406640652441:layer:AWSSDKPandas-Python38:7'
+}
+
 class DataZoneConnectorsProducerCommonStack(Stack):
     """ Class to represents the stack containing all producer-specific common resources in account."""
     
@@ -40,7 +73,7 @@ class DataZoneConnectorsProducerCommonStack(Stack):
         account_id, region = account_props['account_id'], account_props['region']
 
         # ---------------- Lambda Layer ------------------------
-        p_aws_sdk_pandas_layer_arn = f'arn:aws:lambda:{region}:336392948345:layer:AWSSDKPandas-Python38:1'
+        p_aws_sdk_pandas_layer_arn = AWSSDKPANDAS_LAYER_ARNS[region]
         p_aws_sdk_pandas_layer = lambda_.LayerVersion.from_layer_version_arn(
             scope=self, 
             id='p_aws_sdk_pandas_layer',
