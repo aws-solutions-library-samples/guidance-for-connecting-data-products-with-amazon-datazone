@@ -123,7 +123,7 @@ The majority of the monthly cost is dependent on AWS Glue Crawlers. Note that th
 
 ### Supported Regions
 
-Please check for supported regions for Amazon DataZone in the following [link](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/). This guidance has been tested in *us-east-1* region.
+Please check for supported regions for Amazon DataZone in the following [link](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/). This guidance has been tested in *us-east-1* and *us-west-2* regions.
 
 ### Third-party tools
 
@@ -281,7 +281,7 @@ Note that before uninstalling this solution it is recommended to:
 2. Delete all provisioned products from this solution's toolkit (both producer and consumer related). This can be done by either using the DataZone environment roles used to provision them in the first place or using the administrative role(s) specified when provisioning the solution.
 3. Execute the *dz_conn_g_manage_environment_delete* state machine in your governance account for each of the environments created after this solutions installation, because environment roles need to be left as were originally deployed by Amazon DataZone (cleaned); meaning, without the capability / permission extensions that this solution added when environments were created.
     * If not done, it can bring unexpected errors later when trying to delete environments using the Amazon DataZone portal.
-    * To execute the workflow, start a new execution of the *dz_conn_g_manage_environment_delete* state machine in the [AWS Step Functions](https://us-east-1.console.aws.amazon.com/states) console of your governance account using the following input and replacing ```<AMAZON_DATAZONE_DOMAIN_ID>```, ```<AMAZON_DATAZONE_PROJECT_ID>``` and ```<AMAZON_DATAZONE_ENVIRONMENT_ID>``` with the corresponding values for the environment that you are going to clean:
+    * To execute the workflow, start a new execution of the *dz_conn_g_manage_environment_delete* state machine in the [AWS Step Functions](https://console.aws.amazon.com/states) console of your governance account using the following input and replacing ```<AMAZON_DATAZONE_DOMAIN_ID>```, ```<AMAZON_DATAZONE_PROJECT_ID>``` and ```<AMAZON_DATAZONE_ENVIRONMENT_ID>``` with the corresponding values for the environment that you are going to clean:
 
     ``` json
     {
