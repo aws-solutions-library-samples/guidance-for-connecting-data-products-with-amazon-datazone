@@ -126,6 +126,15 @@ class DataZoneConnectorsAccountCommonStack(Stack):
                 iam.PolicyStatement(
                     actions=['secretsmanager:ListSecrets'],
                     resources=['*']
+                ),
+                iam.PolicyStatement(
+                    actions=['iam:PassRole'],
+                    resources=['arn:aws:iam::*:role/*'],
+                    conditions={
+                        'StringEquals': {
+                            'iam:PassedToService': 'glue.amazonaws.com'
+                        }
+                    }
                 )
             ]
         )

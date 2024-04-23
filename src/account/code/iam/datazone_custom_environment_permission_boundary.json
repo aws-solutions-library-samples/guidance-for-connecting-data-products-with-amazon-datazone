@@ -49,7 +49,7 @@
                 "iam:PassRole"
             ],
             "Resource": [
-                "arn:aws:iam::*:role/datazone*"
+                "arn:aws:iam::*:role/*"
             ],
             "Condition": {
                 "StringEquals": {
