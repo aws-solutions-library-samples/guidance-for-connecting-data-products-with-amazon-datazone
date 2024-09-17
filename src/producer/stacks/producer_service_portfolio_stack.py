@@ -74,7 +74,7 @@ class ProducerServicePortfolioStack(Stack):
                     resources=['*']
                 ),
                 iam.PolicyStatement(
-                    actions=['glue:*Connection', 'glue:*Crawler'],
+                    actions=['glue:*Connection', 'glue:*Crawler', 'glue:TagResource'],
                     resources=[f'arn:aws:glue:{region}:{account_id}:catalog', f'arn:aws:glue:{region}:{account_id}:connection/*', f'arn:aws:glue:{region}:{account_id}:crawler/*']
                 )
             ]
